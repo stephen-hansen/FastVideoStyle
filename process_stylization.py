@@ -57,24 +57,17 @@ def memory_limit_image_resize(cont_img):
     return cont_img.width, cont_img.height
 
 
-def stylization(stylization_module, smoothing_module, content_image_path, style_image_path, content_seg_path, style_seg_path, output_image_path,
-                cuda, save_intermediate, no_post, cont_seg_remapping=None, styl_seg_remapping=None):
-    # Load image
+def stylize_image(stylization_module, smoothing_module, cont_img, styl_img, cont_seg, styl_seg, cuda,
+        no_post, cont_seg_remapping=None, styl_seg_remapping=None):
     with torch.no_grad():
-        cont_img = Image.open(content_image_path).convert('RGB')
-        styl_img = Image.open(style_image_path).convert('RGB')
-
         new_cw, new_ch = memory_limit_image_resize(cont_img)
         new_sw, new_sh = memory_limit_image_resize(styl_img)
         cont_pilimg = cont_img.copy()
         cw = cont_pilimg.width
         ch = cont_pilimg.height
         try:
-            cont_seg = Image.open(content_seg_path)
-            styl_seg = Image.open(style_seg_path)
             cont_seg.resize((new_cw,new_ch),Image.NEAREST)
             styl_seg.resize((new_sw,new_sh),Image.NEAREST)
-
         except:
             cont_seg = []
             styl_seg = []
@@ -97,41 +90,71 @@ def stylization(stylization_module, smoothing_module, content_image_path, style_
         if styl_seg_remapping is not None:
             styl_seg = styl_seg_remapping.process(styl_seg)
 
-        if save_intermediate:
-            with Timer("Elapsed time in stylization: %f"):
-                stylized_img = stylization_module.transform(cont_img, styl_img, cont_seg, styl_seg)
-            if ch != new_ch or cw != new_cw:
-                print("De-resize image: (%d,%d)->(%d,%d)" %(new_cw,new_ch,cw,ch))
-                stylized_img = nn.functional.upsample(stylized_img, size=(ch,cw), mode='bilinear')
-            utils.save_image(stylized_img.data.cpu().float(), output_image_path, nrow=1, padding=0)
+        with Timer("Elapsed time in stylization: %f"):
+            stylized_img = stylization_module.transform(cont_img, styl_img, cont_seg, styl_seg)
+        if ch != new_ch or cw != new_cw:
+            print("De-resize image: (%d,%d)->(%d,%d)" %(new_cw,new_ch,cw,ch))
+            stylized_img = nn.functional.upsample(stylized_img, size=(ch,cw), mode='bilinear')
+        grid = utils.make_grid(stylized_img.data, nrow=1, padding=0)
+        ndarr = grid.mul(255).clamp(0, 255).byte().permute(1, 2, 0).cpu().numpy()
+        out_img = Image.fromarray(ndarr)
 
-            with Timer("Elapsed time in propagation: %f"):
-                out_img = smoothing_module.process(output_image_path, content_image_path)
-            out_img.save(output_image_path)
+        with Timer("Elapsed time in propagation: %f"):
+            out_img = smoothing_module.process(out_img, cont_pilimg)
 
-            if not cuda:
-                print("NotImplemented: The CPU version of smooth filter has not been implemented currently.")
-                return
+        if no_post is False:
+            with Timer("Elapsed time in post processing: %f"):
+                out_img = smooth_filter(out_img, cont_pilimg, f_radius=15, f_edge=1e-1)
+        return out_img
 
-            if no_post is False:
-                with Timer("Elapsed time in post processing: %f"):
-                    out_img = smooth_filter(output_image_path, content_image_path, f_radius=15, f_edge=1e-1)
-            out_img.save(output_image_path)
-        else:
-            with Timer("Elapsed time in stylization: %f"):
-                stylized_img = stylization_module.transform(cont_img, styl_img, cont_seg, styl_seg)
-            if ch != new_ch or cw != new_cw:
-                print("De-resize image: (%d,%d)->(%d,%d)" %(new_cw,new_ch,cw,ch))
-                stylized_img = nn.functional.upsample(stylized_img, size=(ch,cw), mode='bilinear')
-            grid = utils.make_grid(stylized_img.data, nrow=1, padding=0)
-            ndarr = grid.mul(255).clamp(0, 255).byte().permute(1, 2, 0).cpu().numpy()
-            out_img = Image.fromarray(ndarr)
 
-            with Timer("Elapsed time in propagation: %f"):
-                out_img = smoothing_module.process(out_img, cont_pilimg)
+def stylization(stylization_module, smoothing_module, content_image_path, style_image_path, content_seg_path, style_seg_path, output_image_path,
+                cuda, no_post, cont_seg_remapping=None, styl_seg_remapping=None):
+    # Load image
+    with torch.no_grad():
+        cont_img = Image.open(content_image_path).convert('RGB')
+        styl_img = Image.open(style_image_path).convert('RGB')
+        try:
+            cont_seg = Image.open(content_seg_path)
+            styl_seg = Image.open(style_seg_path)
+        except:
+            cont_seg = []
+            styl_seg = []
+        out_img = stylize_image(stylization_module, smoothing_module, cont_img, styl_img, cont_seg,
+                styl_seg, cuda, no_post, cont_seg_remapping, styl_seg_remapping)
+        out_img.save(output_image_path)
 
-            if no_post is False:
-                with Timer("Elapsed time in post processing: %f"):
-                    out_img = smooth_filter(out_img, cont_pilimg, f_radius=15, f_edge=1e-1)
-            out_img.save(output_image_path)
+def video_stylization_basic(stylization_module, smoothing_module, content_video_path, style_image_path,
+        content_seg_video_path, style_seg_path, output_video_path, cuda, no_post, cont_seg_remapping=None, styl_seg_remapping=None):
+    # Load image
+    with torch.no_grad():
+        cap = cv2.VideoCapture(content_video_path)
+        success, cont_img = cap.read()
+        styl_img = Image.open(style_image_path).convert('RGB')
+        try:
+            seg_cap = cv2.VideoCapture(content_seg_path)
+            seg_success, cont_seg = seg_cap.read()
+            styl_seg = Image.open(style_seg_path)
+        except:
+            seg_cap = None
+            cont_seg = []
+            styl_seg = []
+
+        frames = []
+        while (success):
+            out_img = stylize_image(stylization_module, smoothing_module, cont_img, styl_img, cont_seg,
+                styl_seg, cuda, no_post, cont_seg_remapping, styl_seg_remapping)
+            frames.append(out_img)
+            success, cont_img = cap.read()
+            if seg_cap != None:
+                seg_success, cont_seg = seg_cap.read()
+                if not seg_success:
+                    break
+        
+        height, width, layers = frames[0].shape
+        size = (width,height)
+        out = cv2.VideoWriter(ouput_video_path, cv2.VideoWriter_fourcc(*'XVID'), 30.0, size)
+        for f in frames:
+            out.write(f)
+        out.release()
 
