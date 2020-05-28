@@ -130,7 +130,6 @@ def video_stylization_basic(stylization_module, smoothing_module, content_video_
     with torch.no_grad():
         cap = cv2.VideoCapture(content_video_path)
         success, cont_img_array = cap.read()
-        print(success)
         styl_img = Image.open(style_image_path).convert('RGB')
         try:
             seg_cap = cv2.VideoCapture(content_seg_path)
@@ -149,7 +148,7 @@ def video_stylization_basic(stylization_module, smoothing_module, content_video_
 
             out_img = stylize_image(stylization_module, smoothing_module, cont_img, styl_img, cont_seg,
                 styl_seg, cuda, no_post, cont_seg_remapping, styl_seg_remapping)
-            frames.append(out_img)
+            frames.append(np.array(out_img))
             
             success, cont_img_array = cap.read()
             if seg_cap != None:
