@@ -129,11 +129,12 @@ def video_stylization_basic(stylization_module, smoothing_module, content_video_
     # Load image
     with torch.no_grad():
         cap = cv2.VideoCapture(content_video_path)
-        success, cont_img = cap.read()
+        success, cont_img_array = cap.read()
+        cont_img = Image.fromarray(cv2.cvtColor(cont_img_array,cv2.COLOR_BGR2RGB))
         styl_img = Image.open(style_image_path).convert('RGB')
         try:
             seg_cap = cv2.VideoCapture(content_seg_path)
-            seg_success, cont_seg = seg_cap.read()
+            seg_success, cont_seg_array = seg_cap.read()
             styl_seg = Image.open(style_seg_path)
         except:
             seg_cap = None
@@ -142,18 +143,23 @@ def video_stylization_basic(stylization_module, smoothing_module, content_video_
 
         frames = []
         while (success):
+            cont_img = Image.fromarray(cv2.cvtColor(cont_img_array,cv2.COLOR_BGR2RGB))
+            if seg_cap != None:
+                cont_seg = Image.fromarray(cv2.cvtColor(cont_seg_array,cv2.COLOR_BGR2RGB))
+
             out_img = stylize_image(stylization_module, smoothing_module, cont_img, styl_img, cont_seg,
                 styl_seg, cuda, no_post, cont_seg_remapping, styl_seg_remapping)
             frames.append(out_img)
-            success, cont_img = cap.read()
+            
+            success, cont_img_array = cap.read()
             if seg_cap != None:
-                seg_success, cont_seg = seg_cap.read()
+                seg_success, cont_seg_array = seg_cap.read()
                 if not seg_success:
                     break
         
         height, width, layers = frames[0].shape
         size = (width,height)
-        out = cv2.VideoWriter(ouput_video_path, cv2.VideoWriter_fourcc(*'XVID'), 30.0, size)
+        out = cv2.VideoWriter(output_video_path, cv2.VideoWriter_fourcc(*'XVID'), 30.0, size)
         for f in frames:
             out.write(f)
         out.release()
