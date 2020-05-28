@@ -148,7 +148,7 @@ def video_stylization_basic(stylization_module, smoothing_module, content_video_
 
             out_img = stylize_image(stylization_module, smoothing_module, cont_img, styl_img, cont_seg,
                 styl_seg, cuda, no_post, cont_seg_remapping, styl_seg_remapping)
-            frames.append(np.array(out_img)[:,:,::-1])
+            frames.append(np.array(out_img)[:,:,::-1].copy())
             
             success, cont_img_array = cap.read()
             if seg_cap != None:
