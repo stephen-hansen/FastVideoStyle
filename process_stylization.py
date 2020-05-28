@@ -128,6 +128,7 @@ def video_stylization_basic(stylization_module, smoothing_module, content_video_
         content_seg_video_path, style_seg_path, output_video_path, cuda, no_post, cont_seg_remapping=None, styl_seg_remapping=None):
     # Load image
     with torch.no_grad():
+        print(content_video_path)
         cap = cv2.VideoCapture(content_video_path)
         success, cont_img_array = cap.read()
         styl_img = Image.open(style_image_path).convert('RGB')
@@ -155,7 +156,8 @@ def video_stylization_basic(stylization_module, smoothing_module, content_video_
                 seg_success, cont_seg_array = seg_cap.read()
                 if not seg_success:
                     break
-        
+        if len(frames) < 1:
+            return
         height, width, layers = frames[0].shape
         size = (width,height)
         out = cv2.VideoWriter(output_video_path, cv2.VideoWriter_fourcc(*'XVID'), 30.0, size)
