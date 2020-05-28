@@ -20,15 +20,15 @@ class Propagator(nn.Module):
     def process(self, initImg, contentImg):
 
         if type(contentImg) == str:
-            content = scipy.misc.imread(contentImg, mode='RGB')
+            content = Image.open(contentImg).convert('RGB')
         else:
             content = contentImg.copy()
         # content = scipy.misc.imread(contentImg, mode='RGB')
 
         if type(initImg) == str:
-            B = scipy.misc.imread(initImg, mode='RGB').astype(np.float64) / 255
+            B = np.asarray(Image.open(initImg).convert('RGB')).astype(np.float64) / 255
         else:
-            B = scipy.asarray(initImg).astype(np.float64) / 255
+            B = np.asarray(initImg).astype(np.float64) / 255
             # B = self.
         # B = scipy.misc.imread(initImg, mode='RGB').astype(np.float64)/255
         h1,w1,k = B.shape
