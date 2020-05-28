@@ -18,6 +18,7 @@ parser.add_argument('--output_video_path', default='./results/example1.avi')
 parser.add_argument('--fast', action='store_true', default=False)
 parser.add_argument('--no_post', action='store_true', default=False)
 parser.add_argument('--cuda', type=int, default=1, help='Enable CUDA.')
+parser.add_argument('--nframes', type=int, default=-1)
 args = parser.parse_args()
 
 # Load model
@@ -42,5 +43,6 @@ process_stylization.video_stylization_basic(
     style_seg_path=args.style_seg_path,
     output_video_path=args.output_video_path,
     cuda=args.cuda,
-    no_post=args.no_post
+    no_post=args.no_post,
+    nframes=args.nframes
 )
