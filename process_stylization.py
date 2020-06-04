@@ -167,3 +167,80 @@ def video_stylization_basic(stylization_module, smoothing_module, content_video_
             out.write(f)
         out.release()
 
+def video_stylization_general_flow(stylization_module, smoothing_module, content_video_path, style_image_path,
+        content_seg_video_path, style_seg_path, output_video_path, cuda, no_post, cont_seg_remapping=None,
+        styl_seg_remapping=None, nframes=-1):
+    # Video stylization with very basic flow tracking
+    # Check for pixels between scenes that are identical colors. If so, copy the model pixel color
+    # from one frame to the next. Otherwise, use a new generated image for the color.
+    # Should be equally as slow as the normal basic method, but add some improvement to
+    # removing artifacts.
+    # Load image
+    with torch.no_grad():
+        cap = cv2.VideoCapture(content_video_path)
+        success, cont_img_array = cap.read()
+        styl_img = Image.open(style_image_path).convert('RGB')
+        try:
+            seg_cap = cv2.VideoCapture(content_seg_path)
+            seg_success, cont_seg_array = seg_cap.read()
+            styl_seg = Image.open(style_seg_path)
+        except:
+            seg_cap = None
+            cont_seg = []
+            styl_seg = []
+
+        prev_cont_img = None
+        prev_out_img = None
+        frames = []
+        count = 0
+        while success and (nframes == -1 or count < nframes):
+            count += 1
+            cont_img = Image.fromarray(cv2.cvtColor(cont_img_array,cv2.COLOR_BGR2RGB))
+            if seg_cap != None:
+                cont_seg = Image.fromarray(cv2.cvtColor(cont_seg_array,cv2.COLOR_BGR2RGB))
+
+            # TODO move me? generate out_img only if necessary
+            out_img = stylize_image(stylization_module, smoothing_module, cont_img, styl_img, cont_seg,
+                styl_seg, cuda, no_post, cont_seg_remapping, styl_seg_remapping)
+            frames.append(np.array(out_img)[:,:,::-1].copy())
+            
+            # If prev content image exists,
+            # loop over pixels, if current color equals previous set the out color
+            # to the previous out color
+            if prev_cont_img != None:
+                width, height = prev_cont_img.size
+                for x in range(width):
+                    for y in range(height):
+                        color = cont_img.getpixel((x,y))
+                        prev_color = prev_cont_img.getpixel((x,y))
+                        if color == prev_color:
+                            out_img.putpixel((x,y), prev_out_img.getpixel((x,y)))
+
+            prev_cont_img = cont_img
+            prev_out_img = out_img
+
+            success, cont_img_array = cap.read()
+            if seg_cap != None:
+                seg_success, cont_seg_array = seg_cap.read()
+                if not seg_success:
+                    break
+        if len(frames) < 1:
+            return
+        height, width, layers = frames[0].shape
+        size = (width,height)
+        out = cv2.VideoWriter(output_video_path, cv2.VideoWriter_fourcc(*'XVID'), 30.0, size)
+        for f in frames:
+            out.write(f)
+        out.release()
+
+def video_stylization_color_mapping(stylization_module, smoothing_module, content_video_path, style_image_path,
+        content_seg_video_path, style_seg_path, output_video_path, cuda, no_post, cont_seg_remapping=None,
+        styl_seg_remapping=None, nframes=-1):
+    # map input colors to output colors
+    pass
+
+def video_stylization_optical_flow(stylization_module, smoothing_module, content_video_path, style_image_path,
+        content_seg_video_path, style_seg_path, output_video_path, cuda, no_post, cont_seg_remapping=None,
+        styl_seg_remapping=None, nframes=-1):
+    # use smarter optical flow for generating images
+    pass
