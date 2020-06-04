@@ -266,7 +266,7 @@ def video_stylization_color_mapping(stylization_module, smoothing_module, conten
             
             # loop over pixels, if current color is in mapping set the out color
             # to the previous out color
-            width, height = prev_cont_img.size
+            width, height = cont_img.size
             for x in range(width):
                 for y in range(height):
                     color = cont_img.getpixel((x,y))
