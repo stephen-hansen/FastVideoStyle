@@ -9,4 +9,4 @@ cd ../images;
 axel -n 1 https://www.cs.drexel.edu/~sph77/CS583/field.jpg --output=style1.png;
 # convert -resize 50% style1.png style1.png;
 cd ..;
-python video_demo.py --general_flow --fast --nframes 120 --content_video_path videos/video1.mp4 --style_image_path images/style1.png --output_video_path results/demo_result_video1.avi;
+python video_demo.py --general_flow --fast --nframes 120 --content_video_path videos/video1.mp4 --style_image_path images/style1.png --output_video_path results/demo_result_video2.avi;
