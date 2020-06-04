@@ -13,6 +13,7 @@ import torch.nn as nn
 import torch
 from smooth_filter import smooth_filter
 import cv2
+#from sklearn.neighbors import NearestNeighbors
 
 class ReMapping:
     def __init__(self):
@@ -202,7 +203,6 @@ def video_stylization_general_flow(stylization_module, smoothing_module, content
             # TODO move me? generate out_img only if necessary
             out_img = stylize_image(stylization_module, smoothing_module, cont_img, styl_img, cont_seg,
                 styl_seg, cuda, no_post, cont_seg_remapping, styl_seg_remapping)
-            frames.append(np.array(out_img)[:,:,::-1].copy())
             
             # If prev content image exists,
             # loop over pixels, if current color equals previous set the out color
@@ -216,6 +216,8 @@ def video_stylization_general_flow(stylization_module, smoothing_module, content
                         if color == prev_color:
                             out_img.putpixel((x,y), prev_out_img.getpixel((x,y)))
 
+            frames.append(np.array(out_img)[:,:,::-1].copy())
+            
             prev_cont_img = cont_img
             prev_out_img = out_img
 
@@ -262,7 +264,6 @@ def video_stylization_color_mapping(stylization_module, smoothing_module, conten
             # TODO move me? generate out_img only if necessary
             out_img = stylize_image(stylization_module, smoothing_module, cont_img, styl_img, cont_seg,
                 styl_seg, cuda, no_post, cont_seg_remapping, styl_seg_remapping)
-            frames.append(np.array(out_img)[:,:,::-1].copy())
             
             # loop over pixels, if current color is in mapping set the out color
             # to the previous out color
@@ -274,6 +275,66 @@ def video_stylization_color_mapping(stylization_module, smoothing_module, conten
                         out_img.putpixel((x,y), color_mapping[color])
                     else:
                         color_mapping[color] = out_img.getpixel((x,y))
+
+            frames.append(np.array(out_img)[:,:,::-1].copy())
+            
+            success, cont_img_array = cap.read()
+            if seg_cap != None:
+                seg_success, cont_seg_array = seg_cap.read()
+                if not seg_success:
+                    break
+        if len(frames) < 1:
+            return
+        height, width, layers = frames[0].shape
+        size = (width,height)
+        out = cv2.VideoWriter(output_video_path, cv2.VideoWriter_fourcc(*'XVID'), 30.0, size)
+        for f in frames:
+            out.write(f)
+        out.release()
+
+#TODO
+def video_stylization_color_mapping_KNN(stylization_module, smoothing_module, content_video_path, style_image_path,
+        content_seg_video_path, style_seg_path, output_video_path, cuda, no_post, cont_seg_remapping=None,
+        styl_seg_remapping=None, nframes=-1):
+    # map input colors to output colors
+    with torch.no_grad():
+        cap = cv2.VideoCapture(content_video_path)
+        success, cont_img_array = cap.read()
+        styl_img = Image.open(style_image_path).convert('RGB')
+        try:
+            seg_cap = cv2.VideoCapture(content_seg_path)
+            seg_success, cont_seg_array = seg_cap.read()
+            styl_seg = Image.open(style_seg_path)
+        except:
+            seg_cap = None
+            cont_seg = []
+            styl_seg = []
+
+        color_mapping = {}
+        frames = []
+        count = 0
+        while success and (nframes == -1 or count < nframes):
+            count += 1
+            cont_img = Image.fromarray(cv2.cvtColor(cont_img_array,cv2.COLOR_BGR2RGB))
+            if seg_cap != None:
+                cont_seg = Image.fromarray(cv2.cvtColor(cont_seg_array,cv2.COLOR_BGR2RGB))
+
+            # TODO move me? generate out_img only if necessary
+            out_img = stylize_image(stylization_module, smoothing_module, cont_img, styl_img, cont_seg,
+                styl_seg, cuda, no_post, cont_seg_remapping, styl_seg_remapping)
+            
+            # loop over pixels, if current color is in mapping set the out color
+            # to the previous out color
+            width, height = cont_img.size
+            for x in range(width):
+                for y in range(height):
+                    color = cont_img.getpixel((x,y))
+                    if color in color_mapping:
+                        out_img.putpixel((x,y), color_mapping[color])
+                    else:
+                        color_mapping[color] = out_img.getpixel((x,y))
+
+            frames.append(np.array(out_img)[:,:,::-1].copy())
 
             success, cont_img_array = cap.read()
             if seg_cap != None:
