@@ -1,7 +1,7 @@
 mkdir images -p && mkdir videos -p && mkdir results -p;
 rm videos/video1.mp4 -rf;
 rm images/style1.png -rf;
-rm results/demo_result_video1.avi
+rm results/demo_result_video2.avi
 cd videos;
 curl https://www.cs.drexel.edu/~sph77/CS583/field.mp4 > video1.mp4
 # Consider installing ffmpeg, reducing video size here
