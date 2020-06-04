@@ -20,6 +20,7 @@ parser.add_argument('--no_post', action='store_true', default=False)
 parser.add_argument('--cuda', type=int, default=1, help='Enable CUDA.')
 parser.add_argument('--nframes', type=int, default=-1)
 parser.add_argument('--general_flow', action='store_true', default=False)
+parser.add_argument('--color_mapping', action='store_true', default=False)
 args = parser.parse_args()
 
 # Load model
@@ -35,7 +36,20 @@ else:
 if args.cuda:
     p_wct.cuda(0)
 
-if args.general_flow:
+if args.color_mapping:
+    process_stylization.video_stylization_color_mapping(
+        stylization_module=p_wct,
+        smoothing_module=p_pro,
+        content_video_path=args.content_video_path,
+        style_image_path=args.style_image_path,
+        content_seg_video_path=args.content_seg_video_path,
+        style_seg_path=args.style_seg_path,
+        output_video_path=args.output_video_path,
+        cuda=args.cuda,
+        no_post=args.no_post,
+        nframes=args.nframes
+    )
+elif args.general_flow:
     process_stylization.video_stylization_general_flow(
         stylization_module=p_wct,
         smoothing_module=p_pro,
