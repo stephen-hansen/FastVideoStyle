@@ -12,9 +12,11 @@ import copy
 import cv2
 import numpy as np
 
+imsize = 480 if torch.cuda.is_available() else 128  # use small size if no gpu
+
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-loader = transforms.Compose([transforms.ToTensor()])  # transform it into a torch tensor
+loader = transforms.Compose([transforms.Resize(imsize), transforms.ToTensor()])  # transform it into a torch tensor
 
 
 def image_loader(image):
