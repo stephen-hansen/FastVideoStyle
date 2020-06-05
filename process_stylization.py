@@ -327,7 +327,7 @@ def video_stylization_optical_flow(stylization_module, smoothing_module, content
             # TODO move me? generate out_img only if necessary
             out_img = stylize_image(stylization_module, smoothing_module, cont_img, styl_img, cont_seg,
                 styl_seg, cuda, no_post, cont_seg_remapping, styl_seg_remapping)
-            
+           
             out_img_arr = np.array(out_img)[:,:,::-1].copy()
 
             if set_prev:
@@ -350,13 +350,15 @@ def video_stylization_optical_flow(stylization_module, smoothing_module, content
                 new_y_grid =  np.copy(new_grid[1])
                 new_y_grid[mask] = y_grid[mask]
                 out_img_arr[new_y_grid,new_x_grid] = prev_out_img_arr[y_grid,x_grid]
+                new_out_img = Image.fromarray(cv2.cvtColor(out_img_arr, cv2.COLOR_BGR2RGB))
+                final_out = Image.blend(out_img, new_out_img, 0.5)
             else:
                 set_prev = True
 
-            frames.append(out_img_arr)
+            frames.append(np.array(final_out)[:,:,::-1].copy())
             
             prev_cont_img_gray = cont_img_gray
-            prev_out_img_arr = out_img_arr
+            prev_out_img_arr = np.array(out_img)[:,:,::-1].copy()
 
             success, cont_img_array = cap.read()
             if seg_cap != None:
