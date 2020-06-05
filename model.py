@@ -202,38 +202,39 @@ def run_style_transfer(content_img, style_img, input_img, prev_img, num_steps=30
     optimizer = get_input_optimizer(input_img)
     print('Optimizing..')
     run = [0]
-    while run[0] <= num_steps:
-        def closure():
-            input_img.data.clamp_(0, 1)
-            optimizer.zero_grad()
-            model(input_img)
-            style_score = 0
-            content_score = 0
-            temporal_score = 0
-            for sl in style_losses:
-                style_score += sl.loss
-            for cl in content_losses:
-                content_score += cl.loss
-            for tl in temporal_losses:
-                temporal_score += tl.loss
+    with torch.enable_grad():
+        while run[0] <= num_steps:
+            def closure():
+                input_img.data.clamp_(0, 1)
+                optimizer.zero_grad()
+                model(input_img)
+                style_score = 0
+                content_score = 0
+                temporal_score = 0
+                for sl in style_losses:
+                    style_score += sl.loss
+                for cl in content_losses:
+                    content_score += cl.loss
+                for tl in temporal_losses:
+                    temporal_score += tl.loss
 
-            style_score *= style_weight
-            content_score *= content_weight
-            temporal_score *= temporal_weight
+                style_score *= style_weight
+                content_score *= content_weight
+                temporal_score *= temporal_weight
 
-            loss = style_score + content_score + temporal_score
-            loss.backward()
+                loss = style_score + content_score + temporal_score
+                loss.backward()
 
-            run[0] += 1
-            if run[0] % 50 == 0:
-                print("run {}:".format(run))
-                print('Style Loss : {:4f} Content Loss : {:4f} Temporal Loss : {:4f}'.format(
-                    style_score.item(), content_score.item(), temporal_score.item()))
-                print()
+                run[0] += 1
+                if run[0] % 50 == 0:
+                    print("run {}:".format(run))
+                    print('Style Loss : {:4f} Content Loss : {:4f} Temporal Loss : {:4f}'.format(
+                        style_score.item(), content_score.item(), temporal_score.item()))
+                    print()
 
-            return style_score + content_score + temporal_score
+                return style_score + content_score + temporal_score
 
-        optimizer.step(closure)
+            optimizer.step(closure)
 
     input_img.data.clamp_(0, 1)
     return input_img
