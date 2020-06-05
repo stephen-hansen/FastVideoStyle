@@ -26,7 +26,7 @@ unloader = transforms.ToPILImage()
 
 class ContentLoss(nn.Module):
     def __init__(self, target):
-        super(CntentLoss, self).__init__()
+        super(ContentLoss, self).__init__()
         # we 'detach' the target content from the tree used
         # to dynamically compute the gradient: this is a stated value,
         # not a variable. Otherwise the forward method of the criterion
@@ -122,8 +122,8 @@ class Normalization(nn.Module):
 
 #content_layers_default = ['relu4_2']
 #style_layers_default = ['relu1_1','relu2_1','relu3_1','relu4_1','relu5_1']
-content_layers_default = ['relu_24']
-style_layers_default = ['relu_3', 'relu_8', 'relu_13', 'relu_22', 'relu_31']
+content_layers_default = ['relu_23']
+style_layers_default = ['relu_2', 'relu_7', 'relu_12', 'relu_21', 'relu_30']
 
 def get_style_model_and_losses(cnn, normalization_mean, normalization_std,
                                style_img, content_img, prev_img,
