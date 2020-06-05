@@ -135,6 +135,7 @@ def get_style_model_and_losses(cnn, normalization_mean, normalization_std,
 
     content_losses = []
     style_losses = []
+    temporal_losses = []
 
     model = nn.Sequential(normalization)
 
@@ -170,14 +171,15 @@ def get_style_model_and_losses(cnn, normalization_mean, normalization_std,
     target = model(prev_img).detach()
     temporal_loss = TemporalLoss(target)
     model.add_module('temporal_loss', temporal_loss)
+    temporal_losses.append(temporal_loss)
 
     for i in range(len(model) - 1, -1, -1):
-        if isinstance(model[i], ContentLoss) or isinstance(model[i], StyleLoss):
+        if isinstance(model[i], ContentLoss) or isinstance(model[i], StyleLoss) or isinstance(model[i], TemporalLoss):
             break
 
     model = model[:(i + 1)]
 
-    return model, style_losses, content_losses, temporal_loss
+    return model, style_losses, content_losses, temporal_losses
 
 def get_input_optimizer(input_img):
     optimizer = optim.LBFGS([input_img.requires_grad_()])
@@ -203,7 +205,8 @@ def run_style_transfer(content_img, style_img, input_img, prev_img, num_steps=30
                 style_score += sl.loss
             for cl in content_losses:
                 content_score += cl.loss
-            temporal_score += temporal_loss.loss
+            for tl in temporal_losses:
+                temporal_score += tl.loss
 
             style_score *= style_weight
             content_score *= content_weight
