@@ -12,7 +12,7 @@ import copy
 import cv2
 import numpy as np
 
-imsize = 480 if torch.cuda.is_available() else 128  # use small size if no gpu
+imsize = 512 if torch.cuda.is_available() else 128  # use small size if no gpu
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -66,9 +66,13 @@ def occlusion(prev_frame, curr_frame):
     pass
 
 def warp(prev_frame, curr_frame):
-    prev_frame_array = prev_frame.cpu().numpy()
+    prev_image = prev_frame.cpu().clone()
+    prev_image = prev_image.squeeze(0)
+    prev_frame_array = np.array(unloader(prev_image))
     prev_frame_gray = cv2.cvtColor(prev_frame_array,cv2.COLOR_BGR2GRAY)
-    curr_frame_array = curr_frame.cpu().numpy()
+    curr_image = curr_frame.cpu().clone()
+    curr_image = curr_image.squeeze(0)
+    curr_frame_array = np.array(unloader(curr_image))
     curr_frame_gray = cv2.cvtColor(curr_frame_array,cv2.COLOR_BGR2GRAY)
     flow = cv2.calcOpticalFlowFarneback(prev_frame_gray, curr_frame_gray, None, 0.5, 5, 15, 3, 5, 1.1, 0)
     bflow = cv2.calcOpticalFlowFarneback(curr_frame_gray, prev_frame_gray, None, 0.5, 5, 15, 3, 5, 1.1, 0)
