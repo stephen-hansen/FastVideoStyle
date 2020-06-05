@@ -22,6 +22,7 @@ parser.add_argument('--nframes', type=int, default=-1)
 parser.add_argument('--general_flow', action='store_true', default=False)
 parser.add_argument('--color_mapping', action='store_true', default=False)
 parser.add_argument('--optical_flow', action='store_true', default=False)
+parser.add_argument('--smart_optical_flow', action='store_true', default=False)
 args = parser.parse_args()
 
 # Load model
@@ -37,7 +38,20 @@ else:
 if args.cuda:
     p_wct.cuda(0)
 
-if args.optical_flow:
+if args.smart_optical_flow:
+    process_stylization.video_stylization_smart_optical_flow(
+        stylization_module=p_wct,
+        smoothing_module=p_pro,
+        content_video_path=args.content_video_path,
+        style_image_path=args.style_image_path,
+        content_seg_video_path=args.content_seg_video_path,
+        style_seg_path=args.style_seg_path,
+        output_video_path=args.output_video_path,
+        cuda=args.cuda,
+        no_post=args.no_post,
+        nframes=args.nframes
+    )
+elif args.optical_flow:
     process_stylization.video_stylization_optical_flow(
         stylization_module=p_wct,
         smoothing_module=p_pro,
