@@ -329,9 +329,11 @@ def video_stylization_optical_flow(stylization_module, smoothing_module, content
                 styl_seg, cuda, no_post, cont_seg_remapping, styl_seg_remapping)
            
             out_img_arr = np.array(out_img)[:,:,::-1].copy()
+            new_out_img_arr = np.array(out_img)[:,:,::-1].copy()
 
             if set_prev:
                 flow = cv2.calcOpticalFlowFarneback(prev_cont_img_gray, cont_img_gray, None, 0.5, 5, 15, 3, 5, 1.1, 0)
+                bflow = cv2.calcOpticalFlowFarneback(cont_img_gray, prev_cont_img_gray, None, 0.5, 5, 15, 3, 5, 1.1, 0)
                 height = prev_out_img_arr.shape[0]
                 width = prev_out_img_arr.shape[1]
                 xs = np.arange(width)
@@ -349,9 +351,12 @@ def video_stylization_optical_flow(stylization_module, smoothing_module, content
                 mask = (new_grid[1] < 0) | (new_grid[1] >= height)
                 new_y_grid =  np.copy(new_grid[1])
                 new_y_grid[mask] = y_grid[mask]
-                out_img_arr[new_y_grid,new_x_grid] = prev_out_img_arr[y_grid,x_grid]
-                new_out_img = Image.fromarray(cv2.cvtColor(out_img_arr, cv2.COLOR_BGR2RGB))
-                final_out = Image.blend(out_img, new_out_img, 0.5)
+                new_out_img_arr[new_y_grid,new_x_grid] = prev_out_img_arr[y_grid,x_grid]
+                mask = np.isclose(flow[:,:,0], -bflow[:,:,0]) & np.isclose(flow[:,:,1], -bflow[:,:,1])
+                new_out_img_arr[np.invert(mask)] = out_img_arr[np.invert(mask)]
+                new_out_img = Image.fromarray(cv2.cvtColor(new_out_img_arr, cv2.COLOR_BGR2RGB))
+                final_out = new_out_img
+                #final_out = Image.blend(out_img, new_out_img, 0.5)
             else:
                 final_out = out_img
                 set_prev = True
@@ -359,7 +364,7 @@ def video_stylization_optical_flow(stylization_module, smoothing_module, content
             frames.append(np.array(final_out)[:,:,::-1].copy())
             
             prev_cont_img_gray = cont_img_gray
-            prev_out_img_arr = np.array(out_img)[:,:,::-1].copy()
+            prev_out_img_arr = np.array(final_out)[:,:,::-1].copy()
 
             success, cont_img_array = cap.read()
             if seg_cap != None:
