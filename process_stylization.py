@@ -324,25 +324,34 @@ def video_stylization_optical_flow(stylization_module, smoothing_module, content
             out_img = stylize_image(stylization_module, smoothing_module, cont_img, styl_img, cont_seg,
                 styl_seg, cuda, no_post, cont_seg_remapping, styl_seg_remapping)
             
+            out_img_arr = np.array(out_img)[:,:,::-1].copy()
+
             if set_prev:
                 flow = cv2.calcOpticalFlowFarneback(prev_cont_img_gray, cont_img_gray, None, 0.5, 5, 15, 3, 5, 1.1, 0)
                 width, height = prev_out_img.size
-                for x in range(width):
-                    for y in range(height):
-                        u = flow[y,x,0]
-                        v = flow[y,x,1]
-                        prev_color = prev_out_img.getpixel((x,y))
-                        newx = int(np.around(x+u))
-                        newy = int(np.around(y+v))
-                        if newx >= 0 and newx < width and newy >= 0 and newy < height:
-                            out_img.putpixel((newx, newy), prev_color)
+                xs = np.arange(width)
+                ys = np.arange(height)
+                grid = np.meshgrid(xs, ys)
+                x_grid = grid[0]
+                y_grid = grid[1]
+                new_grid = grid.copy()
+                new_grid[0] += flow[:,:,0]
+                new_grid[1] += flow[:,:,1]
+                new_grid = np.around(new_grid).astype(int)
+                mask = (new_grid[0] < 0 or new_grid[0] >= width)
+                new_x_grid = np.copy(new_grid[0])
+                new_x_grid[mask] = x_grid[mask]
+                mask = (new_grid[1] < 0 or new_grid[1] >= height)
+                new_y_grid =  np.copy(new_grid[1])
+                new_y_grid[mask] = y_grid[mask]
+                out_img_arr[new_y_grid,new_x_grid] = prev_out_img_arr[y_grid,x_grid]
             else:
-                set_prev =  True
+                set_prev = True
 
-            frames.append(np.array(out_img)[:,:,::-1].copy())
+            frames.append(out_img_arr)
             
             prev_cont_img_gray = cont_img_gray
-            prev_out_img = out_img
+            prev_out_img_arr = out_img_arr
 
             success, cont_img_array = cap.read()
             if seg_cap != None:
