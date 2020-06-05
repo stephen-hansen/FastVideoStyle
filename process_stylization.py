@@ -326,7 +326,7 @@ def video_stylization_optical_flow(stylization_module, smoothing_module, content
             
             if set_prev:
                 flow = cv2.calcOpticalFlowFarneback(prev_cont_img_gray, cont_img_gray, None, 0.5, 5, 15, 3, 5, 1.1, 0)
-                width, height = prev_cont_img.size
+                width, height = prev_out_img.size
                 for x in range(width):
                     for y in range(height):
                         u = flow[x,y,0]
