@@ -40,7 +40,7 @@ class Timer:
 def memory_limit_image_resize(cont_img):
     # prevent too small or too big images
     MINSIZE=256
-    MAXSIZE=1920
+    MAXSIZE=480
     orig_width = cont_img.width
     orig_height = cont_img.height
     if max(cont_img.width,cont_img.height) < MINSIZE:
@@ -196,6 +196,7 @@ def video_stylization_general_flow(stylization_module, smoothing_module, content
         while success and (nframes == -1 or count < nframes):
             count += 1
             cont_img = Image.fromarray(cv2.cvtColor(cont_img_array,cv2.COLOR_BGR2RGB))
+            memory_limit_image_resize(cont_img)
             if seg_cap != None:
                 cont_seg = Image.fromarray(cv2.cvtColor(cont_seg_array,cv2.COLOR_BGR2RGB))
 
@@ -257,6 +258,7 @@ def video_stylization_color_mapping(stylization_module, smoothing_module, conten
         while success and (nframes == -1 or count < nframes):
             count += 1
             cont_img = Image.fromarray(cv2.cvtColor(cont_img_array,cv2.COLOR_BGR2RGB))
+            memory_limit_image_resize(cont_img)
             if seg_cap != None:
                 cont_seg = Image.fromarray(cv2.cvtColor(cont_seg_array,cv2.COLOR_BGR2RGB))
 
@@ -316,6 +318,8 @@ def video_stylization_optical_flow(stylization_module, smoothing_module, content
         while success and (nframes == -1 or count < nframes):
             count += 1
             cont_img = Image.fromarray(cv2.cvtColor(cont_img_array,cv2.COLOR_BGR2RGB))
+            memory_limit_image_resize(cont_img)
+            cont_img_array = np.array(cont_img)
             cont_img_gray = cv2.cvtColor(cont_img_array,cv2.COLOR_BGR2GRAY)
             if seg_cap != None:
                 cont_seg = Image.fromarray(cv2.cvtColor(cont_seg_array,cv2.COLOR_BGR2RGB))
