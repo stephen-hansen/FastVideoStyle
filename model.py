@@ -102,9 +102,9 @@ class TemporalLoss(nn.Module):
         self.target = target_feature.detach()
 
     def forward(self, input):
-        D = input.size
-        warped = warp(self.target, input)
-        self.loss = torch.sum((F.mse_loss(input - warped)))/D
+        D = input.numel()
+        #warped = warp(self.target, input)
+        self.loss = torch.sum((F.mse_loss(input, self.target)))/D
 
 cnn = models.vgg19(pretrained=True).features.to(device).eval()
 
@@ -194,7 +194,7 @@ def get_input_optimizer(input_img):
 def run_style_transfer(content_img, style_img, input_img, prev_img, num_steps=300,
                        style_weight=20, content_weight=1, temporal_weight=200):
     print('Building the style transfer model...')
-    model, style_losses, content_losses, temporal_loss = get_style_model_and_losses(cnn,
+    model, style_losses, content_losses, temporal_losses = get_style_model_and_losses(cnn,
             normalization_mean, normalization_std, style_img, content_img, prev_img)
     optimizer = get_input_optimizer(input_img)
     print('Optimizing..')
