@@ -328,7 +328,7 @@ def video_stylization_optical_flow(stylization_module, smoothing_module, content
 
             if set_prev:
                 flow = cv2.calcOpticalFlowFarneback(prev_cont_img_gray, cont_img_gray, None, 0.5, 5, 15, 3, 5, 1.1, 0)
-                width, height = prev_out_img.size
+                height, width = prev_out_img_arr.shape
                 xs = np.arange(width)
                 ys = np.arange(height)
                 grid = np.meshgrid(xs, ys)
