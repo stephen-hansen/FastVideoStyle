@@ -332,7 +332,7 @@ def video_stylization_optical_flow(stylization_module, smoothing_module, content
                         u = flow[x,y,0]
                         v = flow[x,y,1]
                         prev_color = prev_out_img.getpixel((x,y))
-                        out_img.putpixel((np.around(x+u),np.around(y+v)), prev_color)
+                        out_img.putpixel((int(np.around(x+u)),int(np.around(y+v))), prev_color)
             else:
                 set_prev =  True
 
