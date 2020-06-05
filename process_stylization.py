@@ -308,13 +308,14 @@ def video_stylization_optical_flow(stylization_module, smoothing_module, content
             cont_seg = []
             styl_seg = []
 
-        prev_cont_img = None
+        prev_cont_img_gray = None
         prev_out_img = None
         frames = []
         count = 0
         while success and (nframes == -1 or count < nframes):
             count += 1
             cont_img = Image.fromarray(cv2.cvtColor(cont_img_array,cv2.COLOR_BGR2RGB))
+            cont_img_gray = cv2.cvtColor(cont_img_array,cv2.COLOR_BGR2GRAY)
             if seg_cap != None:
                 cont_seg = Image.fromarray(cv2.cvtColor(cont_seg_array,cv2.COLOR_BGR2RGB))
 
@@ -322,8 +323,8 @@ def video_stylization_optical_flow(stylization_module, smoothing_module, content
             out_img = stylize_image(stylization_module, smoothing_module, cont_img, styl_img, cont_seg,
                 styl_seg, cuda, no_post, cont_seg_remapping, styl_seg_remapping)
             
-            if prev_cont_img != None:
-                flow = cv2.calcOpticalFlowFarneback(np.array(prev_cont_img), np.array(cont_img), None, 0.5, 5, 15, 3, 5, 1.1, 0)
+            if prev_cont_img_gray != None:
+                flow = cv2.calcOpticalFlowFarneback(prev_cont_img_gray, cont_img_gray, None, 0.5, 5, 15, 3, 5, 1.1, 0)
                 width, height = prev_cont_img.size
                 for x in range(width):
                     for y in range(height):
@@ -334,7 +335,7 @@ def video_stylization_optical_flow(stylization_module, smoothing_module, content
 
             frames.append(np.array(out_img)[:,:,::-1].copy())
             
-            prev_cont_img = cont_img
+            prev_cont_img_gray = cont_img_gray
             prev_out_img = out_img
 
             success, cont_img_array = cap.read()
