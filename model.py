@@ -237,4 +237,6 @@ def run_style_transfer(content_img, style_img, input_img, prev_img, num_steps=30
             optimizer.step(closure)
 
     input_img.data.clamp_(0, 1)
-    return input_img
+    image = input_img.cpu().clone()  # we clone the tensor to not do changes on it
+    image = image.squeeze(0)      # remove the fake batch dimension
+    return image
