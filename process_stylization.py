@@ -13,7 +13,6 @@ import torch.nn as nn
 import torch
 from smooth_filter import smooth_filter
 import cv2
-#from sklearn.neighbors import NearestNeighbors
 
 class ReMapping:
     def __init__(self):
@@ -292,11 +291,10 @@ def video_stylization_color_mapping(stylization_module, smoothing_module, conten
             out.write(f)
         out.release()
 
-#TODO
-def video_stylization_color_mapping_KNN(stylization_module, smoothing_module, content_video_path, style_image_path,
+def video_stylization_optical_flow(stylization_module, smoothing_module, content_video_path, style_image_path,
         content_seg_video_path, style_seg_path, output_video_path, cuda, no_post, cont_seg_remapping=None,
         styl_seg_remapping=None, nframes=-1):
-    # map input colors to output colors
+    # use smarter optical flow for generating images
     with torch.no_grad():
         cap = cv2.VideoCapture(content_video_path)
         success, cont_img_array = cap.read()
@@ -310,7 +308,8 @@ def video_stylization_color_mapping_KNN(stylization_module, smoothing_module, co
             cont_seg = []
             styl_seg = []
 
-        color_mapping = {}
+        prev_cont_img = None
+        prev_out_img = None
         frames = []
         count = 0
         while success and (nframes == -1 or count < nframes):
@@ -323,18 +322,20 @@ def video_stylization_color_mapping_KNN(stylization_module, smoothing_module, co
             out_img = stylize_image(stylization_module, smoothing_module, cont_img, styl_img, cont_seg,
                 styl_seg, cuda, no_post, cont_seg_remapping, styl_seg_remapping)
             
-            # loop over pixels, if current color is in mapping set the out color
-            # to the previous out color
-            width, height = cont_img.size
-            for x in range(width):
-                for y in range(height):
-                    color = cont_img.getpixel((x,y))
-                    if color in color_mapping:
-                        out_img.putpixel((x,y), color_mapping[color])
-                    else:
-                        color_mapping[color] = out_img.getpixel((x,y))
+            if prev_cont_img != None:
+                flow = cv2.calcOpticalFlowFarneback(prev_cont_img, cont_img, 0.5, 5, 15, 3, 5, 1.1, 0)
+                width, height = prev_cont_img.size
+                for x in range(width):
+                    for y in range(height):
+                        u = flow[x,y,0]
+                        v = flow[x,y,1]
+                        prev_color = prev_out_img.getpixel((x,y))
+                        out_img.putpixel((np.around(x+u),np.around(y+v)), prev_color)
 
             frames.append(np.array(out_img)[:,:,::-1].copy())
+            
+            prev_cont_img = cont_img
+            prev_out_img = out_img
 
             success, cont_img_array = cap.read()
             if seg_cap != None:
@@ -349,9 +350,3 @@ def video_stylization_color_mapping_KNN(stylization_module, smoothing_module, co
         for f in frames:
             out.write(f)
         out.release()
-
-def video_stylization_optical_flow(stylization_module, smoothing_module, content_video_path, style_image_path,
-        content_seg_video_path, style_seg_path, output_video_path, cuda, no_post, cont_seg_remapping=None,
-        styl_seg_remapping=None, nframes=-1):
-    # use smarter optical flow for generating images
-    pass
