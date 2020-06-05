@@ -353,6 +353,7 @@ def video_stylization_optical_flow(stylization_module, smoothing_module, content
                 new_out_img = Image.fromarray(cv2.cvtColor(out_img_arr, cv2.COLOR_BGR2RGB))
                 final_out = Image.blend(out_img, new_out_img, 0.5)
             else:
+                final_out = out_img
                 set_prev = True
 
             frames.append(np.array(final_out)[:,:,::-1].copy())
