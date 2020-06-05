@@ -339,14 +339,14 @@ def video_stylization_optical_flow(stylization_module, smoothing_module, content
                 grid = np.meshgrid(xs, ys)
                 x_grid = grid[0]
                 y_grid = grid[1]
-                new_grid = grid.copy().astype(np.float64)
+                new_grid = np.copy(grid).astype(np.float64)
                 new_grid[0] += flow[:,:,0]
                 new_grid[1] += flow[:,:,1]
                 new_grid = np.around(new_grid).astype(np.int64)
-                mask = (new_grid[0] < 0 or new_grid[0] >= width)
+                mask = (new_grid[0] < 0) | (new_grid[0] >= width)
                 new_x_grid = np.copy(new_grid[0])
                 new_x_grid[mask] = x_grid[mask]
-                mask = (new_grid[1] < 0 or new_grid[1] >= height)
+                mask = (new_grid[1] < 0) | (new_grid[1] >= height)
                 new_y_grid =  np.copy(new_grid[1])
                 new_y_grid[mask] = y_grid[mask]
                 out_img_arr[new_y_grid,new_x_grid] = prev_out_img_arr[y_grid,x_grid]
