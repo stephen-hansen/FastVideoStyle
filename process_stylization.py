@@ -323,7 +323,7 @@ def video_stylization_optical_flow(stylization_module, smoothing_module, content
                 styl_seg, cuda, no_post, cont_seg_remapping, styl_seg_remapping)
             
             if prev_cont_img != None:
-                flow = cv2.calcOpticalFlowFarneback(prev_cont_img, cont_img, None, 0.5, 5, 15, 3, 5, 1.1, 0)
+                flow = cv2.calcOpticalFlowFarneback(np.array(prev_cont_img), np.array(cont_img), None, 0.5, 5, 15, 3, 5, 1.1, 0)
                 width, height = prev_cont_img.size
                 for x in range(width):
                     for y in range(height):
