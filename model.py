@@ -66,9 +66,9 @@ def occlusion(prev_frame, curr_frame):
     pass
 
 def warp(prev_frame, curr_frame):
-    prev_frame_array = prev_frame.numpy()
+    prev_frame_array = prev_frame.cpu().numpy()
     prev_frame_gray = cv2.cvtColor(prev_frame_array,cv2.COLOR_BGR2GRAY)
-    curr_frame_array = curr_frame.numpy()
+    curr_frame_array = curr_frame.cpu().numpy()
     curr_frame_gray = cv2.cvtColor(curr_frame_array,cv2.COLOR_BGR2GRAY)
     flow = cv2.calcOpticalFlowFarneback(prev_frame_gray, curr_frame_gray, None, 0.5, 5, 15, 3, 5, 1.1, 0)
     bflow = cv2.calcOpticalFlowFarneback(curr_frame_gray, prev_frame_gray, None, 0.5, 5, 15, 3, 5, 1.1, 0)
