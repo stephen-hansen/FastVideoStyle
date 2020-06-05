@@ -16,28 +16,15 @@ imsize = 512 if torch.cuda.is_available() else 128  # use small size if no gpu
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
+loader = transforms.Compose([transforms.Resize(imsize), transforms.ToTensor()])  # transform it into a torch tensor
+
+
 def image_loader(image):
-    if max(image.size) > imsize:
-        size = imsize
-    else:
-        size = max(image.size)
+    # fake batch dimension required to fit network's input dimensions
+    image = loader(image).unsqueeze(0)
+    return image.to(device, torch.float)
 
-    in_transform = transforms.Compose([
-        transforms.Resize((size, int(1.5*size))),
-        transforms.ToTensor(),
-        transforms.Normalize((0.485,0.456,0.406),(0.229,0.224,0.225))])
-    
-    image = in_transform(image)[:3, :, :].unsqueeze(0)
-    
-    return image
-
-def unloader(tensor):
-    image = tensor.to("cpu").clone().detach()
-    image  = image.numpy().squeeze()
-    image = image.transpose(1, 2, 0)
-    image = image * np.array((0.229,0.224,0.225)) + np.array((0.485,0.456,0.406))
-    image = image.clip(0, 1)
-    return image
+unloader = transforms.ToPILImage()
 
 class ContentLoss(nn.Module):
     def __init__(self, target):
@@ -52,11 +39,18 @@ class ContentLoss(nn.Module):
         self.loss = F.mse_loss(input, self.target)
         return input
 
-def gram_matrix(tensor):
-    _, n_filters, h, w = tensor.size()
-    tensor = tensor.view(n_filters, h * w)
-    gram = torch.mm(tensor, tensor.t())
-    return gram
+def gram_matrix(input):
+    a, b, c, d = input.size()  # a=batch size(=1)
+    # b=number of feature maps
+    # (c,d)=dimensions of a f. map (N=c*d)
+
+    features = input.view(a * b, c * d)  # resise F_XL into \hat F_XL
+
+    G = torch.mm(features, features.t())  # compute the gram product
+
+    # we 'normalize' the values of the gram matrix
+    # by dividing by the number of element in each feature maps.
+    return G.div(a * b * c * d)
 
 class StyleLoss(nn.Module):
     def __init__(self, target_feature):
@@ -113,8 +107,6 @@ class TemporalLoss(nn.Module):
         self.loss = torch.sum((F.mse_loss(input, self.target)))/D
 
 cnn = models.vgg19(pretrained=True).features.to(device).eval()
-for param in cnn.parameters():
-    param.requires_grad_(False)
 
 normalization_mean = torch.tensor([0.485, 0.456, 0.406]).to(device)
 normalization_std = torch.tensor([0.229, 0.224, 0.225]).to(device)
@@ -227,7 +219,7 @@ def run_style_transfer(content_img, style_img, input_img, prev_img, num_steps=30
             temporal_score *= temporal_weight
 
             loss = style_score + content_score + temporal_score
-            loss.backward(retain_graph=True)
+            loss.backward()
 
             run[0] += 1
             if run[0] % 50 == 0:
