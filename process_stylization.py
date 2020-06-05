@@ -413,6 +413,7 @@ def video_stylization_smart_optical_flow(stylization_module, smoothing_module, c
            
             out_img_arr = np.array(out_img)[:,:,::-1].copy()
             if set_prev:
+                styl_img = styl_img.resize(out_img.size)
                 final_out = unloader(run_style_transfer(image_loader(cont_img), image_loader(styl_img),
                     image_loader(out_img), image_loader(prev_out_img)))
             else:
