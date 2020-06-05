@@ -40,7 +40,7 @@ class Timer:
 def memory_limit_image_resize(cont_img):
     # prevent too small or too big images
     MINSIZE=256
-    MAXSIZE=960
+    MAXSIZE=1920
     orig_width = cont_img.width
     orig_height = cont_img.height
     if max(cont_img.width,cont_img.height) < MINSIZE:
@@ -329,8 +329,8 @@ def video_stylization_optical_flow(stylization_module, smoothing_module, content
                 width, height = prev_out_img.size
                 for x in range(width):
                     for y in range(height):
-                        u = flow[x,y,0]
-                        v = flow[x,y,1]
+                        u = flow[y,x,0]
+                        v = flow[y,x,1]
                         prev_color = prev_out_img.getpixel((x,y))
                         newx = int(np.around(x+u))
                         newy = int(np.around(y+v))
