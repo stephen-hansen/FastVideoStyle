@@ -308,6 +308,7 @@ def video_stylization_optical_flow(stylization_module, smoothing_module, content
             cont_seg = []
             styl_seg = []
 
+        set_prev = False
         prev_cont_img_gray = None
         prev_out_img = None
         frames = []
@@ -323,7 +324,7 @@ def video_stylization_optical_flow(stylization_module, smoothing_module, content
             out_img = stylize_image(stylization_module, smoothing_module, cont_img, styl_img, cont_seg,
                 styl_seg, cuda, no_post, cont_seg_remapping, styl_seg_remapping)
             
-            if prev_cont_img_gray != None:
+            if set_prev:
                 flow = cv2.calcOpticalFlowFarneback(prev_cont_img_gray, cont_img_gray, None, 0.5, 5, 15, 3, 5, 1.1, 0)
                 width, height = prev_cont_img.size
                 for x in range(width):
@@ -332,6 +333,8 @@ def video_stylization_optical_flow(stylization_module, smoothing_module, content
                         v = flow[x,y,1]
                         prev_color = prev_out_img.getpixel((x,y))
                         out_img.putpixel((np.around(x+u),np.around(y+v)), prev_color)
+            else:
+                set_prev =  True
 
             frames.append(np.array(out_img)[:,:,::-1].copy())
             
