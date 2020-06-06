@@ -426,13 +426,13 @@ def video_stylization_smart_optical_flow(stylization_module, smoothing_module, c
             # TODO move me? generate out_img only if necessary
             out_img = stylize_image(stylization_module, smoothing_module, cont_img, styl_img, cont_seg,
                 styl_seg, cuda, no_post, cont_seg_remapping, styl_seg_remapping)
-           
+            
+            cont_img = cont_img.resize(out_img.size)
+            styl_img = styl_img.resize(out_img.size)
 
             if set_prev:
-                cont_img = cont_img.resize(out_img.size)
-                styl_img = styl_img.resize(out_img.size)
                 final_out = unloader(run_style_transfer(image_loader(cont_img),
-                    image_loader(styl_img), image_loader(out_img), image_loader(prev_out_img)))
+                    image_loader(styl_img), image_loader(out_img), image_loader(prev_out_img), image_loader(prev_cont_img)))
             else:
                 final_out = out_img
                 set_prev = True
@@ -440,6 +440,7 @@ def video_stylization_smart_optical_flow(stylization_module, smoothing_module, c
             frames.append(np.array(final_out)[:,:,::-1].copy())
             
             prev_out_img = final_out
+            prev_cont_img = cont_img
 
             success, cont_img_array = cap.read()
             if seg_cap != None:
