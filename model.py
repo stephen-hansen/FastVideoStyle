@@ -63,11 +63,15 @@ class StyleLoss(nn.Module):
         return input
 
 def occlusion(fflow, bflow):
-    height = fflow.shape[0]
-    width = fflow.shape[1]
+    h = fflow.shape[0]
+    w = fflow.shape[1]
     img = np.ones((h, w, 3))
-    mask = np.linalg.norm(fflow + bflow) > 0.01*(np.linalg.norm(fflow) + np.linalg.norm(bflow)) + 0.5
-    print(mask)
+    mask = np.linalg.norm(fflow + bflow, axis=2) > 0.01*(np.linalg.norm(fflow, axis=2) + np.linalg.norm(bflow, axis=2)) + 0.5
+    img[:,:,0] = mask
+    img[:,:,1] = mask
+    img[:,:,2] = mask
+    img *= 255
+    return img
 
 def gen_flow(prev_frame_array, curr_frame_array):
     prev_frame_gray = cv2.cvtColor(prev_frame_array,cv2.COLOR_BGR2GRAY)
@@ -121,12 +125,14 @@ def warp(prev_out_array, flow):
     return new_frame_array
 
 class TemporalLoss(nn.Module):
-    def __init__(self, target):
+    def __init__(self, target, occlusion):
         super(TemporalLoss, self).__init__()
         self.target = target.detach()
+        self.occlusion = occlusion.detach()
 
     def forward(self, input):
-        self.loss = F.mse_loss(input, self.target, reduction='sum')
+        # occlusion is 0 or 1 here, it's okay to modify
+        self.loss = F.mse_loss(self.occlusion*input, self.occlusion*self.target, reduction='sum')
         return input
 
 cnn = models.vgg19(pretrained=True).features.to(device).eval()
@@ -208,7 +214,8 @@ def get_style_model_and_losses(cnn, normalization_mean, normalization_std,
     content_img_arr = content_img_arr.squeeze(0)
     content_img_arr = np.array(unloader(content_img_arr))
     flow, fflow, bflow = gen_flow(prev_content_img_arr, content_img_arr)
-    occlusion(fflow, bflow)
+    occ_img = occlusion(fflow, bflow)
+    occ_img = image_loader(occ_img)
     prev_image = prev_img.cpu().clone()
     prev_image = prev_image.squeeze(0)
     prev_image = np.array(unloader(prev_image))
@@ -216,7 +223,8 @@ def get_style_model_and_losses(cnn, normalization_mean, normalization_std,
     prev_warped = Image.fromarray(cv2.cvtColor(prev_warped[:,:,::-1], cv2.COLOR_BGR2RGB))
     prev_warped = image_loader(prev_warped)
     target = model(prev_warped).detach()
-    temporal_loss = TemporalLoss(target)
+    target2 = model(occ_img).detach()
+    temporal_loss = TemporalLoss(target, target2)
     temporal_losses.append(temporal_loss)
     model.add_module('temporal_loss', temporal_loss)
 
