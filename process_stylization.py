@@ -436,7 +436,7 @@ def video_stylization_smart_optical_flow(stylization_module, smoothing_module, c
             else:
                 final_out = unloader(run_style_transfer(image_loader(cont_img),
                     image_loader(styl_img), image_loader(out_img), image_loader(out_img),
-                    image_loader(cont_img)), temporal_weight=0)
+                    image_loader(cont_img), temporal_weight=0))
                 set_prev = True
 
             frames.append(np.array(final_out)[:,:,::-1].copy())
