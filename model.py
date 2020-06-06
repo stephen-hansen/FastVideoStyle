@@ -12,7 +12,7 @@ import copy
 import cv2
 import numpy as np
 
-imsize = 512 if torch.cuda.is_available() else 128  # use small size if no gpu
+imsize = 270 if torch.cuda.is_available() else 128  # use small size if no gpu
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -65,19 +65,15 @@ class StyleLoss(nn.Module):
 def occlusion(prev_frame, curr_frame):
     pass
 
-def warp(prev_frame, curr_frame):
-    prev_image = prev_frame.cpu().clone()
-    prev_image = prev_image.squeeze(0)
-    prev_frame_array = np.array(unloader(prev_image))
+def gen_flow(prev_frame_array, curr_frame_array):
     prev_frame_gray = cv2.cvtColor(prev_frame_array,cv2.COLOR_BGR2GRAY)
-    curr_image = curr_frame.cpu().clone()
-    curr_image = curr_image.squeeze(0)
-    curr_frame_array = np.array(unloader(curr_image))
     curr_frame_gray = cv2.cvtColor(curr_frame_array,cv2.COLOR_BGR2GRAY)
     flow = cv2.calcOpticalFlowFarneback(prev_frame_gray, curr_frame_gray, None, 0.5, 5, 15, 3, 5, 1.1, 0)
-    bflow = cv2.calcOpticalFlowFarneback(curr_frame_gray, prev_frame_gray, None, 0.5, 5, 15, 3, 5, 1.1, 0)
-    height = prev_frame_array.shape[0]
-    width = prev_frame_array.shape[1]
+    return flow
+
+def warp(prev_out_array, flow):
+    height = prev_out_array.shape[0]
+    width = prev_out_array.shape[1]
     xs = np.arange(width)
     ys = np.arange(height)
     grid = np.meshgrid(xs, ys)
@@ -93,18 +89,18 @@ def warp(prev_frame, curr_frame):
     mask = (new_grid[1] < 0) | (new_grid[1] >= height)
     new_y_grid =  np.copy(new_grid[1])
     new_y_grid[mask] = y_grid[mask]
-    curr_frame_array[new_y_grid,new_x_grid] = prev_frame_array[y_grid,x_grid]
-    return torch.from_numpy(curr_frame_array)
+    new_frame_array = np.copy(prev_out_array)
+    new_frame_array[new_y_grid,new_x_grid] = prev_out_array[y_grid,x_grid]
+    return new_frame_array
 
 class TemporalLoss(nn.Module):
-    def __init__(self, target_feature):
+    def __init__(self, target):
         super(TemporalLoss, self).__init__()
-        self.target = target_feature.detach()
+        self.target = target.detach()
 
     def forward(self, input):
-        D = input.numel()
-        #warped = warp(self.target, input)
-        self.loss = torch.sum((F.mse_loss(input, self.target)))/D
+        self.loss = F.mse_loss(input, self.target)
+        return input
 
 cnn = models.vgg19(pretrained=True).features.to(device).eval()
 
@@ -135,7 +131,7 @@ content_layers_default = ['relu_23']
 style_layers_default = ['relu_2', 'relu_7', 'relu_12', 'relu_21', 'relu_30']
 
 def get_style_model_and_losses(cnn, normalization_mean, normalization_std,
-                               style_img, content_img, prev_img,
+                               style_img, content_img, prev_img, prev_content_img,
                                content_layers=content_layers_default,
                                style_layers=style_layers_default):
     cnn = copy.deepcopy(cnn)
@@ -176,11 +172,25 @@ def get_style_model_and_losses(cnn, normalization_mean, normalization_std,
             style_loss = StyleLoss(target_feature)
             model.add_module("style_loss_{}".format(i), style_loss)
             style_losses.append(style_loss)
+  
 
-    target = model(prev_img).detach()
+    prev_content_img_arr = prev_content_img.cpu().clone()  # we clone the tensor to not do changes on it
+    prev_content_img_arr = prev_content_img_arr.squeeze(0)
+    prev_content_img_arr = np.array(unloader(prev_content_img_arr))
+    content_img_arr = content_img.cpu().clone()  # we clone the tensor to not do changes on it
+    content_img_arr = content_img_arr.squeeze(0)
+    content_img_arr = np.array(unloader(content_img_arr))
+    flow = gen_flow(prev_content_img_arr, content_img_arr)
+    prev_image = prev_img.cpu().clone()
+    prev_image = prev_image.squeeze(0)
+    prev_image = np.array(unloader(prev_image))
+    prev_warped = warp(prev_image, flow)
+    prev_warped = Image.fromarray(cv2.cvtColor(prev_warped[:,:,::-1], cv2.COLOR_BGR2RGB))
+    prev_warped = image_loader(prev_warped)
+    target = model(prev_warped).detach()
     temporal_loss = TemporalLoss(target)
-    model.add_module('temporal_loss', temporal_loss)
     temporal_losses.append(temporal_loss)
+    model.add_module('temporal_loss', temporal_loss)
 
     for i in range(len(model) - 1, -1, -1):
         if isinstance(model[i], ContentLoss) or isinstance(model[i], StyleLoss) or isinstance(model[i], TemporalLoss):
@@ -194,11 +204,10 @@ def get_input_optimizer(input_img):
     optimizer = optim.LBFGS([input_img.requires_grad_()])
     return optimizer
 
-def run_style_transfer(content_img, style_img, input_img, prev_img, num_steps=300,
-                       style_weight=20, content_weight=1, temporal_weight=200):
+def run_style_transfer(content_img, style_img, input_img, prev_img, prev_content_img, num_steps=300,
+                       style_weight=0, content_weight=0, temporal_weight=200):
     print('Building the style transfer model...')
-    model, style_losses, content_losses, temporal_losses = get_style_model_and_losses(cnn,
-            normalization_mean, normalization_std, style_img, content_img, prev_img)
+    model, style_losses, content_losses, temporal_losses = get_style_model_and_losses(cnn, normalization_mean, normalization_std, style_img, content_img, prev_img, prev_content_img)
     optimizer = get_input_optimizer(input_img)
     print('Optimizing..')
     run = [0]
@@ -207,7 +216,7 @@ def run_style_transfer(content_img, style_img, input_img, prev_img, num_steps=30
             def closure():
                 input_img.data.clamp_(0, 1)
                 optimizer.zero_grad()
-                model(input_img)
+                warped = model(input_img)
                 style_score = 0
                 content_score = 0
                 temporal_score = 0
