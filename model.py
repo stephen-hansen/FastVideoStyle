@@ -67,10 +67,11 @@ def occlusion(fflow, bflow):
     w = fflow.shape[1]
     img = np.ones((h, w, 3))
     mask = np.linalg.norm(fflow + bflow, axis=2) > 0.01*(np.linalg.norm(fflow, axis=2) + np.linalg.norm(bflow, axis=2)) + 0.5
-    img[:,:,0] = mask
-    img[:,:,1] = mask
-    img[:,:,2] = mask
+    img[:,:,0] = np.invert(mask)
+    img[:,:,1] = np.invert(mask)
+    img[:,:,2] = np.invert(mask)
     img *= 255
+    print(np.sum(mask))
     return img
 
 def gen_flow(prev_frame_array, curr_frame_array):
@@ -87,8 +88,8 @@ def gen_flow(prev_frame_array, curr_frame_array):
     x_grid = grid[0]
     y_grid = grid[1]
     new_grid = np.copy(grid).astype(np.float64)
-    new_grid[0] -= bflow[:,:,0]
-    new_grid[1] -= bflow[:,:,1]
+    new_grid[0] += bflow[:,:,0]
+    new_grid[1] += bflow[:,:,1]
     new_grid = np.around(new_grid).astype(np.int64)
     mask = (new_grid[0] < 0) | (new_grid[0] >= width)
     new_x_grid = np.copy(new_grid[0])
@@ -132,7 +133,7 @@ class TemporalLoss(nn.Module):
 
     def forward(self, input):
         # occlusion is 0 or 1 here, it's okay to modify
-        self.loss = F.mse_loss(self.occlusion*input, self.occlusion*self.target, reduction='sum')
+        self.loss = F.mse_loss(self.occlusion*input, self.occlusion*self.target)
         return input
 
 cnn = models.vgg19(pretrained=True).features.to(device).eval()
@@ -171,9 +172,29 @@ def get_style_model_and_losses(cnn, normalization_mean, normalization_std,
 
     normalization = Normalization(normalization_mean, normalization_std).to(device)
 
+    prev_content_img_arr = prev_content_img.cpu().clone()  # we clone the tensor to not do changes on it
+    prev_content_img_arr = prev_content_img_arr.squeeze(0)
+    prev_content_img_arr = np.array(unloader(prev_content_img_arr))
+    content_img_arr = content_img.cpu().clone()  # we clone the tensor to not do changes on it
+    content_img_arr = content_img_arr.squeeze(0)
+    content_img_arr = np.array(unloader(content_img_arr))
+    flow, fflow, bflow = gen_flow(prev_content_img_arr, content_img_arr)
+    occ_img = occlusion(fflow, bflow)
+    occ_img = Image.fromarray(np.uint8(occ_img)).convert('RGB')
+    occ_img = image_loader(occ_img)
+    prev_image = prev_img.cpu().clone()
+    prev_image = prev_image.squeeze(0)
+    prev_image = np.array(unloader(prev_image))
+    prev_warped = warp(prev_image, flow)
+    prev_warped = Image.fromarray(cv2.cvtColor(prev_warped[:,:,::-1], cv2.COLOR_BGR2RGB))
+    prev_warped = image_loader(prev_warped)
+    target = prev_warped.detach()
+    target2 = occ_img.detach()
+
+    temporal_loss = TemporalLoss(target, target2).to(device)
+
     content_losses = []
     style_losses = []
-    temporal_losses = []
 
     model = nn.Sequential(normalization)
 
@@ -205,28 +226,6 @@ def get_style_model_and_losses(cnn, normalization_mean, normalization_std,
             style_loss = StyleLoss(target_feature)
             model.add_module("style_loss_{}".format(i), style_loss)
             style_losses.append(style_loss)
-  
-
-    prev_content_img_arr = prev_content_img.cpu().clone()  # we clone the tensor to not do changes on it
-    prev_content_img_arr = prev_content_img_arr.squeeze(0)
-    prev_content_img_arr = np.array(unloader(prev_content_img_arr))
-    content_img_arr = content_img.cpu().clone()  # we clone the tensor to not do changes on it
-    content_img_arr = content_img_arr.squeeze(0)
-    content_img_arr = np.array(unloader(content_img_arr))
-    flow, fflow, bflow = gen_flow(prev_content_img_arr, content_img_arr)
-    occ_img = occlusion(fflow, bflow)
-    occ_img = image_loader(occ_img)
-    prev_image = prev_img.cpu().clone()
-    prev_image = prev_image.squeeze(0)
-    prev_image = np.array(unloader(prev_image))
-    prev_warped = warp(prev_image, flow)
-    prev_warped = Image.fromarray(cv2.cvtColor(prev_warped[:,:,::-1], cv2.COLOR_BGR2RGB))
-    prev_warped = image_loader(prev_warped)
-    target = model(prev_warped).detach()
-    target2 = model(occ_img).detach()
-    temporal_loss = TemporalLoss(target, target2)
-    temporal_losses.append(temporal_loss)
-    model.add_module('temporal_loss', temporal_loss)
 
     for i in range(len(model) - 1, -1, -1):
         if isinstance(model[i], ContentLoss) or isinstance(model[i], StyleLoss) or isinstance(model[i], TemporalLoss):
@@ -234,16 +233,16 @@ def get_style_model_and_losses(cnn, normalization_mean, normalization_std,
 
     model = model[:(i + 1)]
 
-    return model, style_losses, content_losses, temporal_losses
+    return model, style_losses, content_losses, temporal_loss
 
 def get_input_optimizer(input_img):
     optimizer = optim.LBFGS([input_img.requires_grad_()])
     return optimizer
 
-def run_style_transfer(content_img, style_img, input_img, prev_img, prev_content_img, num_steps=500,
-                       style_weight=0, content_weight=0, temporal_weight=200):
+def run_style_transfer(content_img, style_img, input_img, prev_img, prev_content_img, num_steps=300,
+                       style_weight=20, content_weight=1, temporal_weight=200):
     print('Building the style transfer model...')
-    model, style_losses, content_losses, temporal_losses = get_style_model_and_losses(cnn, normalization_mean, normalization_std, style_img, content_img, prev_img, prev_content_img)
+    model, style_losses, content_losses, temporal_loss = get_style_model_and_losses(cnn, normalization_mean, normalization_std, style_img, content_img, prev_img, prev_content_img)
     optimizer = get_input_optimizer(input_img)
     print('Optimizing..')
     run = [0]
@@ -252,16 +251,16 @@ def run_style_transfer(content_img, style_img, input_img, prev_img, prev_content
             def closure():
                 input_img.data.clamp_(0, 1)
                 optimizer.zero_grad()
-                warped = model(input_img)
+                temporal_loss(input_img)
+                model(input_img)
                 style_score = 0
                 content_score = 0
                 temporal_score = 0
+                temporal_score += temporal_loss.loss
                 for sl in style_losses:
                     style_score += sl.loss
                 for cl in content_losses:
                     content_score += cl.loss
-                for tl in temporal_losses:
-                    temporal_score += tl.loss
 
                 style_score *= style_weight
                 content_score *= content_weight
