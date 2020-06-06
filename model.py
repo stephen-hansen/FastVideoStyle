@@ -62,14 +62,41 @@ class StyleLoss(nn.Module):
         self.loss = F.mse_loss(G, self.target)
         return input
 
-def occlusion(prev_frame, curr_frame):
-    pass
+def occlusion(fflow, bflow):
+    height = fflow.shape[0]
+    width = fflow.shape[1]
+    img = np.ones((h, w, 3))
+    mask = np.linalg.norm(fflow + bflow) > 0.01*(np.linalg.norm(fflow) + np.linalg.norm(bflow)) + 0.5
+    print(mask)
 
 def gen_flow(prev_frame_array, curr_frame_array):
     prev_frame_gray = cv2.cvtColor(prev_frame_array,cv2.COLOR_BGR2GRAY)
     curr_frame_gray = cv2.cvtColor(curr_frame_array,cv2.COLOR_BGR2GRAY)
     flow = cv2.calcOpticalFlowFarneback(prev_frame_gray, curr_frame_gray, None, 0.5, 5, 15, 3, 5, 1.1, 0)
-    return flow
+    bflow = cv2.calcOpticalFlowFarneback(curr_frame_gray, prev_frame_gray, None, 0.5, 5, 15, 3, 5, 1.1, 0)
+   
+    height = prev_frame_array.shape[0]
+    width = prev_frame_array.shape[1]
+    xs = np.arange(width)
+    ys = np.arange(height)
+    grid = np.meshgrid(xs, ys)
+    x_grid = grid[0]
+    y_grid = grid[1]
+    new_grid = np.copy(grid).astype(np.float64)
+    new_grid[0] -= bflow[:,:,0]
+    new_grid[1] -= bflow[:,:,1]
+    new_grid = np.around(new_grid).astype(np.int64)
+    mask = (new_grid[0] < 0) | (new_grid[0] >= width)
+    new_x_grid = np.copy(new_grid[0])
+    new_x_grid[mask] = x_grid[mask]
+    mask = (new_grid[1] < 0) | (new_grid[1] >= height)
+    new_y_grid =  np.copy(new_grid[1])
+    new_y_grid[mask] = y_grid[mask]
+    # We now have a warped grid
+    # Plug the warped grid into the forward flow function
+    fflow = np.copy(flow)
+    fflow[y_grid,x_grid] = flow[new_y_grid,new_x_grid]
+    return flow, fflow, bflow
 
 def warp(prev_out_array, flow):
     height = prev_out_array.shape[0]
@@ -180,7 +207,8 @@ def get_style_model_and_losses(cnn, normalization_mean, normalization_std,
     content_img_arr = content_img.cpu().clone()  # we clone the tensor to not do changes on it
     content_img_arr = content_img_arr.squeeze(0)
     content_img_arr = np.array(unloader(content_img_arr))
-    flow = gen_flow(prev_content_img_arr, content_img_arr)
+    flow, fflow, bflow = gen_flow(prev_content_img_arr, content_img_arr)
+    occlusion(fflow, bflow)
     prev_image = prev_img.cpu().clone()
     prev_image = prev_image.squeeze(0)
     prev_image = np.array(unloader(prev_image))
