@@ -99,7 +99,7 @@ class TemporalLoss(nn.Module):
         self.target = target.detach()
 
     def forward(self, input):
-        self.loss = F.mse_loss(input, self.target)
+        self.loss = F.mse_loss(input, self.target, reduction='sum')
         return input
 
 cnn = models.vgg19(pretrained=True).features.to(device).eval()
