@@ -3,10 +3,10 @@ rm videos/video1.mp4 -rf;
 rm images/style1.png -rf;
 rm results/perframe_result.avi
 cd videos;
-curl https://www.cs.drexel.edu/~sph77/CS583/field.mp4 > video1.mp4
+curl "$VIDEO_SOURCE" > video1.mp4
 # Consider installing ffmpeg, reducing video size here
 cd ../images;
-axel -n 1 https://www.cs.drexel.edu/~sph77/CS583/field.jpg --output=style1.png;
+axel -n 1 "$STYLE_SOURCE" --output=style1.png;
 # convert -resize 50% style1.png style1.png;
 cd ..;
 time python video_demo.py --fast --nframes 120 --content_video_path videos/video1.mp4 --style_image_path images/style1.png --output_video_path results/perframe_result.avi;
