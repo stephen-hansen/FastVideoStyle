@@ -409,8 +409,9 @@ def video_stylization_smart_optical_flow(stylization_module, smoothing_module, c
             cont_seg = []
             styl_seg = []
 
-        set_prev = False
-        prev_cont_img_gray = None
+        set_prev = 0
+        prev_cont_img = None
+        pprev_cont_img = None
         prev_out_img = None
         frames = []
         count = 0
@@ -430,18 +431,25 @@ def video_stylization_smart_optical_flow(stylization_module, smoothing_module, c
             cont_img = cont_img.resize(out_img.size)
             styl_img = styl_img.resize(out_img.size)
 
-            if set_prev:
+            if set_prev == 2:
                 final_out = unloader(run_style_transfer(image_loader(cont_img),
-                    image_loader(styl_img), image_loader(out_img), image_loader(prev_out_img), image_loader(prev_cont_img)))
-            else:
+                    image_loader(styl_img), image_loader(out_img), image_loader(prev_out_img),
+                    image_loader(prev_cont_img), image_loader(pprev_cont_img)))
+            elif set_prev == 1:
+                final_out = unloader(run_style_transfer(image_loader(cont_img),
+                    image_loader(styl_img), image_loader(out_img), image_loader(prev_out_img),
+                    image_loader(prev_cont_img), image_loader(prev_cont_img), temporal_weight=0))
+                set_prev = 2
+            elif set_prev == 0:
                 final_out = unloader(run_style_transfer(image_loader(cont_img),
                     image_loader(styl_img), image_loader(out_img), image_loader(out_img),
-                    image_loader(cont_img), temporal_weight=0))
-                set_prev = True
+                    image_loader(cont_img), image_loader(cont_img), temporal_weight=0))
+                set_prev = 1
 
             frames.append(np.array(final_out)[:,:,::-1].copy())
             
             prev_out_img = final_out
+            pprev_cont_img = prev_cont_img
             prev_cont_img = cont_img
 
             success, cont_img_array = cap.read()

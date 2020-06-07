@@ -62,11 +62,13 @@ class StyleLoss(nn.Module):
         self.loss = F.mse_loss(G, self.target)
         return input
 
-def occlusion(fflow, bflow):
+def occlusion(fflow, bflow, prev_bflow):
     h = fflow.shape[0]
     w = fflow.shape[1]
     img = np.ones((h, w, 3))
-    mask = np.linalg.norm(fflow + bflow, axis=2) > 0.01*(np.linalg.norm(fflow, axis=2) + np.linalg.norm(bflow, axis=2)) + 0.5
+    mask = (np.linalg.norm(fflow + bflow, axis=2) > 0.01*(np.linalg.norm(fflow, axis=2) + \
+           np.linalg.norm(bflow, axis=2)) + 0.5) | (np.square(bflow[:,:,0] - prev_bflow[:,:,0]) + \
+           np.square(bflow[:,:,1] - prev_bflow[:,:,1]) > 0.01*(np.linalg.norm(bflow, axis=2)) + 0.002)
     img[:,:,0] = np.invert(mask)
     img[:,:,1] = np.invert(mask)
     img[:,:,2] = np.invert(mask)
@@ -163,9 +165,12 @@ class Normalization(nn.Module):
 #style_layers_default = ['relu1_1','relu2_1','relu3_1','relu4_1','relu5_1']
 content_layers_default = ['relu_23']
 style_layers_default = ['relu_2', 'relu_7', 'relu_12', 'relu_21', 'relu_30']
+#content_layers_default = ['conv_22']
+#style_layers_default = ['conv_1', 'conv_6', 'conv_11', 'conv_20', 'conv_29']
 
 def get_style_model_and_losses(cnn, normalization_mean, normalization_std,
                                style_img, content_img, prev_img, prev_content_img,
+                               pprev_content_img,
                                content_layers=content_layers_default,
                                style_layers=style_layers_default):
     cnn = copy.deepcopy(cnn)
@@ -175,11 +180,15 @@ def get_style_model_and_losses(cnn, normalization_mean, normalization_std,
     prev_content_img_arr = prev_content_img.cpu().clone()  # we clone the tensor to not do changes on it
     prev_content_img_arr = prev_content_img_arr.squeeze(0)
     prev_content_img_arr = np.array(unloader(prev_content_img_arr))
+    pprev_content_img_arr = pprev_content_img.cpu().clone()  # we clone the tensor to not do changes on it
+    pprev_content_img_arr = pprev_content_img_arr.squeeze(0)
+    pprev_content_img_arr = np.array(unloader(pprev_content_img_arr))
     content_img_arr = content_img.cpu().clone()  # we clone the tensor to not do changes on it
     content_img_arr = content_img_arr.squeeze(0)
     content_img_arr = np.array(unloader(content_img_arr))
     flow, fflow, bflow = gen_flow(prev_content_img_arr, content_img_arr)
-    occ_img = occlusion(fflow, bflow)
+    flow2, fflow2, bflow2 = gen_flow(pprev_content_img_arr, prev_content_img_arr)
+    occ_img = occlusion(fflow, bflow, bflow2)
     occ_img = Image.fromarray(np.uint8(occ_img)).convert('RGB')
     occ_img = image_loader(occ_img)
     prev_image = prev_img.cpu().clone()
@@ -239,10 +248,11 @@ def get_input_optimizer(input_img):
     optimizer = optim.LBFGS([input_img.requires_grad_()])
     return optimizer
 
-def run_style_transfer(content_img, style_img, input_img, prev_img, prev_content_img, num_steps=300,
-                       style_weight=20, content_weight=1, temporal_weight=200):
+def run_style_transfer(content_img, style_img, input_img, prev_img, prev_content_img, 
+                       pprev_content_img, num_steps=500, style_weight=1e4, 
+                       content_weight=5e0, temporal_weight=2e2):
     print('Building the style transfer model...')
-    model, style_losses, content_losses, temporal_loss = get_style_model_and_losses(cnn, normalization_mean, normalization_std, style_img, content_img, prev_img, prev_content_img)
+    model, style_losses, content_losses, temporal_loss = get_style_model_and_losses(cnn, normalization_mean, normalization_std, style_img, content_img, prev_img, prev_content_img, pprev_content_img)
     optimizer = get_input_optimizer(input_img)
     print('Optimizing..')
     run = [0]
