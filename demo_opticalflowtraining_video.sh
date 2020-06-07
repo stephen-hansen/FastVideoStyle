@@ -9,4 +9,4 @@ cd ../images;
 axel -n 1 "$STYLE_SOURCE" --output=style5.png;
 # convert -resize 50% style1.png style1.png;
 cd ..;
-time python video_demo.py --smart_optical_flow --fast --nframes 120 --content_video_path videos/video5.mp4 --style_image_path images/style5.png --output_video_path results/opticalflowtraining_result.avi;
+time python video_demo.py --smart_optical_flow --fast --nframes 10 --content_video_path videos/video5.mp4 --style_image_path images/style5.png --output_video_path results/opticalflowtraining_result.avi;
