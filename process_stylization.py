@@ -466,3 +466,76 @@ def video_stylization_smart_optical_flow(stylization_module, smoothing_module, c
             out.write(f)
         out.release()
 
+def video_stylization_artistic_optical_flow(stylization_module, smoothing_module, content_video_path, style_image_path,
+        content_seg_video_path, style_seg_path, output_video_path, cuda, no_post, cont_seg_remapping=None,
+        styl_seg_remapping=None, nframes=-1):
+    # use smarter optical flow for generating images
+    with torch.no_grad():
+        cap = cv2.VideoCapture(content_video_path)
+        success, cont_img_array = cap.read()
+        styl_img = Image.open(style_image_path).convert('RGB')
+        try:
+            seg_cap = cv2.VideoCapture(content_seg_path)
+            seg_success, cont_seg_array = seg_cap.read()
+            styl_seg = Image.open(style_seg_path)
+        except:
+            seg_cap = None
+            cont_seg = []
+            styl_seg = []
+
+        set_prev = 0
+        prev_cont_img = None
+        pprev_cont_img = None
+        prev_out_img = None
+        frames = []
+        count = 0
+        while success and (nframes == -1 or count < nframes):
+            count += 1
+            cont_img = Image.fromarray(cv2.cvtColor(cont_img_array,cv2.COLOR_BGR2RGB))
+            memory_limit_image_resize(cont_img)
+            cont_img_array = np.array(cont_img)
+            cont_img_gray = cv2.cvtColor(cont_img_array,cv2.COLOR_BGR2GRAY)
+            if seg_cap != None:
+                cont_seg = Image.fromarray(cv2.cvtColor(cont_seg_array,cv2.COLOR_BGR2RGB))
+
+            # TODO move me? generate out_img only if necessary
+            out_img = stylize_image(stylization_module, smoothing_module, cont_img, styl_img, cont_seg,
+                styl_seg, cuda, no_post, cont_seg_remapping, styl_seg_remapping)
+            
+            cont_img = cont_img.resize(out_img.size)
+            styl_img = styl_img.resize(out_img.size)
+
+            if set_prev == 2:
+                final_out = unloader(run_style_transfer(image_loader(cont_img),
+                    image_loader(styl_img), image_loader(out_img), image_loader(prev_out_img),
+                    image_loader(prev_cont_img), image_loader(pprev_cont_img), style_weight=1e6))
+            elif set_prev == 1:
+                final_out = unloader(run_style_transfer(image_loader(cont_img),
+                    image_loader(styl_img), image_loader(out_img), image_loader(prev_out_img),
+                    image_loader(prev_cont_img), image_loader(prev_cont_img), style_weight=1e6, temporal_weight=0))
+                set_prev = 2
+            elif set_prev == 0:
+                final_out = unloader(run_style_transfer(image_loader(cont_img),
+                    image_loader(styl_img), image_loader(out_img), image_loader(out_img),
+                    image_loader(cont_img), image_loader(cont_img), style_weight=1e6, temporal_weight=0))
+                set_prev = 1
+
+            frames.append(np.array(final_out)[:,:,::-1].copy())
+            
+            prev_out_img = final_out
+            pprev_cont_img = prev_cont_img
+            prev_cont_img = cont_img
+
+            success, cont_img_array = cap.read()
+            if seg_cap != None:
+                seg_success, cont_seg_array = seg_cap.read()
+                if not seg_success:
+                    break
+        if len(frames) < 1:
+            return
+        height, width, layers = frames[0].shape
+        size = (width,height)
+        out = cv2.VideoWriter(output_video_path, cv2.VideoWriter_fourcc(*'XVID'), 30.0, size)
+        for f in frames:
+            out.write(f)
+        out.release()
