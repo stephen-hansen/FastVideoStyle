@@ -1,4 +1,10 @@
 """
+process_stylization.py
+
+Contains new video stylization methods and has old methods for image stylization.
+"""
+
+"""
 Copyright (C) 2018 NVIDIA Corporation.  All rights reserved.
 Licensed under the CC BY-NC-SA 4.0 license (https://creativecommons.org/licenses/by-nc-sa/4.0/legalcode).
 """
@@ -41,7 +47,7 @@ class Timer:
 def memory_limit_image_resize(cont_img):
     # prevent too small or too big images
     MINSIZE=256
-    MAXSIZE=480
+    MAXSIZE=480 # limit to 480p
     orig_width = cont_img.width
     orig_height = cont_img.height
     if max(cont_img.width,cont_img.height) < MINSIZE:
@@ -60,6 +66,19 @@ def memory_limit_image_resize(cont_img):
 
 def stylize_image(stylization_module, smoothing_module, cont_img, styl_img, cont_seg, styl_seg, cuda,
         no_post, cont_seg_remapping=None, styl_seg_remapping=None):
+    """
+    Stylize a single image, a single frame.
+    stylization_module : the style model
+    smoothing_module : post-processing smoothing module
+    cont_img : content, Pillow Image
+    styl_img : style, Pillow Image
+    cont_seg : segmentation map for content, Pillow Image
+    styl_seg : segmentation map for style, Pillow Image
+    cuda : use GPU or not
+    no_post : enable post_processing
+    cont_seg_remapping : map segmentation to image sections
+    styl_seg_remapping : map segmentation to style sections
+    """
     with torch.no_grad():
         new_cw, new_ch = memory_limit_image_resize(cont_img)
         new_sw, new_sh = memory_limit_image_resize(styl_img)
@@ -111,6 +130,20 @@ def stylize_image(stylization_module, smoothing_module, cont_img, styl_img, cont
 
 def stylization(stylization_module, smoothing_module, content_image_path, style_image_path, content_seg_path, style_seg_path, output_image_path,
                 cuda, no_post, cont_seg_remapping=None, styl_seg_remapping=None):
+    """
+    Stylize and save a single image.
+    stylization_module : the style model
+    smoothing_module : post-processing smoothing module
+    content_image_path : path of content image
+    style_image_path : path of style image
+    content_seg_path : path of content segmentation
+    style_seg_path : path of style segmentation
+    output_image_path : place to store result image
+    cuda : use GPU or not
+    no_post : enable post_processing
+    cont_seg_remapping : map segmentation to image sections
+    styl_seg_remapping : map segmentation to style sections
+    """
     # Load image
     with torch.no_grad():
         cont_img = Image.open(content_image_path).convert('RGB')
@@ -128,13 +161,27 @@ def stylization(stylization_module, smoothing_module, content_image_path, style_
 def video_stylization_basic(stylization_module, smoothing_module, content_video_path, style_image_path,
         content_seg_video_path, style_seg_path, output_video_path, cuda, no_post, cont_seg_remapping=None,
         styl_seg_remapping=None, nframes=-1):
-    # Load image
+    """
+    Stylize and save a video. Style each frame separately.
+    stylization_module : the style model
+    smoothing_module : post-processing smoothing module
+    content_video_path : path of content video
+    style_image_path : path of style image
+    content_seg_video_path : path of content segmentation video
+    style_seg_path : path of style segmentation
+    output_video_path : place to store result video
+    cuda : use GPU or not
+    no_post : enable post_processing
+    cont_seg_remapping : map segmentation to image sections
+    styl_seg_remapping : map segmentation to style sections
+    nframes : number of frames to stylize. if -1, stylize all frames.
+    """
     with torch.no_grad():
-        cap = cv2.VideoCapture(content_video_path)
+        cap = cv2.VideoCapture(content_video_path) # create video capture for content
         success, cont_img_array = cap.read()
         styl_img = Image.open(style_image_path).convert('RGB')
         try:
-            seg_cap = cv2.VideoCapture(content_seg_path)
+            seg_cap = cv2.VideoCapture(content_seg_path) # create video capture for segmentation, if any
             seg_success, cont_seg_array = seg_cap.read()
             styl_seg = Image.open(style_seg_path)
         except:
@@ -144,16 +191,18 @@ def video_stylization_basic(stylization_module, smoothing_module, content_video_
 
         frames = []
         count = 0
-        while success and (nframes == -1 or count < nframes):
+        while success and (nframes == -1 or count < nframes): # Loop over frames, while reading or if nframes limit is hit
             count += 1
-            cont_img = Image.fromarray(cv2.cvtColor(cont_img_array,cv2.COLOR_BGR2RGB))
+            cont_img = Image.fromarray(cv2.cvtColor(cont_img_array,cv2.COLOR_BGR2RGB)) # Load the current frame
             if seg_cap != None:
-                cont_seg = Image.fromarray(cv2.cvtColor(cont_seg_array,cv2.COLOR_BGR2RGB))
+                cont_seg = Image.fromarray(cv2.cvtColor(cont_seg_array,cv2.COLOR_BGR2RGB)) # Load current seg
 
+            # Stylize the frame
             out_img = stylize_image(stylization_module, smoothing_module, cont_img, styl_img, cont_seg,
                 styl_seg, cuda, no_post, cont_seg_remapping, styl_seg_remapping)
-            frames.append(np.array(out_img)[:,:,::-1].copy())
+            frames.append(np.array(out_img)[:,:,::-1].copy()) # Add to list of frames
             
+            # Load next frame
             success, cont_img_array = cap.read()
             if seg_cap != None:
                 seg_success, cont_seg_array = seg_cap.read()
@@ -163,6 +212,7 @@ def video_stylization_basic(stylization_module, smoothing_module, content_video_
             return
         height, width, layers = frames[0].shape
         size = (width,height)
+        # Save the video, 30 FPS, XVID
         out = cv2.VideoWriter(output_video_path, cv2.VideoWriter_fourcc(*'XVID'), 30.0, size)
         for f in frames:
             out.write(f)
@@ -171,14 +221,29 @@ def video_stylization_basic(stylization_module, smoothing_module, content_video_
 def video_stylization_general_flow(stylization_module, smoothing_module, content_video_path, style_image_path,
         content_seg_video_path, style_seg_path, output_video_path, cuda, no_post, cont_seg_remapping=None,
         styl_seg_remapping=None, nframes=-1):
-    # Video stylization with very basic flow tracking
-    # Check for pixels between scenes that are identical colors. If so, copy the model pixel color
-    # from one frame to the next. Otherwise, use a new generated image for the color.
-    # Should be equally as slow as the normal basic method, but add some improvement to
-    # removing artifacts.
-    # Load image
+    """
+    Stylize and save a video.
+    Check for pixels between scenes that are identical colors. If so, copy the model pixel color
+    from one frame to the next. Otherwise, use a new generated image for the color.
+    Should be equally as slow as the normal basic method, but add some improvement to
+    removing artifacts.
+    stylization_module : the style model
+    smoothing_module : post-processing smoothing module
+    content_video_path : path of content video
+    style_image_path : path of style image
+    content_seg_video_path : path of content segmentation video
+    style_seg_path : path of style segmentation
+    output_video_path : place to store result video
+    cuda : use GPU or not
+    no_post : enable post_processing
+    cont_seg_remapping : map segmentation to image sections
+    styl_seg_remapping : map segmentation to style sections
+    nframes : number of frames to stylize. if -1, stylize all frames.
+    """
+
     with torch.no_grad():
         cap = cv2.VideoCapture(content_video_path)
+        # Load video, load first frame
         success, cont_img_array = cap.read()
         styl_img = Image.open(style_image_path).convert('RGB')
         try:
@@ -194,6 +259,7 @@ def video_stylization_general_flow(stylization_module, smoothing_module, content
         prev_out_img = None
         frames = []
         count = 0
+        # Loop over frames
         while success and (nframes == -1 or count < nframes):
             count += 1
             cont_img = Image.fromarray(cv2.cvtColor(cont_img_array,cv2.COLOR_BGR2RGB))
@@ -201,7 +267,6 @@ def video_stylization_general_flow(stylization_module, smoothing_module, content
             if seg_cap != None:
                 cont_seg = Image.fromarray(cv2.cvtColor(cont_seg_array,cv2.COLOR_BGR2RGB))
 
-            # TODO move me? generate out_img only if necessary
             out_img = stylize_image(stylization_module, smoothing_module, cont_img, styl_img, cont_seg,
                 styl_seg, cuda, no_post, cont_seg_remapping, styl_seg_remapping)
             
@@ -219,9 +284,11 @@ def video_stylization_general_flow(stylization_module, smoothing_module, content
 
             frames.append(np.array(out_img)[:,:,::-1].copy())
             
+            # Save previous input and output frames
             prev_cont_img = cont_img
             prev_out_img = out_img
 
+            # Read next frame
             success, cont_img_array = cap.read()
             if seg_cap != None:
                 seg_success, cont_seg_array = seg_cap.read()
@@ -231,6 +298,7 @@ def video_stylization_general_flow(stylization_module, smoothing_module, content
             return
         height, width, layers = frames[0].shape
         size = (width,height)
+        # Save video
         out = cv2.VideoWriter(output_video_path, cv2.VideoWriter_fourcc(*'XVID'), 30.0, size)
         for f in frames:
             out.write(f)
@@ -239,8 +307,26 @@ def video_stylization_general_flow(stylization_module, smoothing_module, content
 def video_stylization_color_mapping(stylization_module, smoothing_module, content_video_path, style_image_path,
         content_seg_video_path, style_seg_path, output_video_path, cuda, no_post, cont_seg_remapping=None,
         styl_seg_remapping=None, nframes=-1):
-    # map input colors to output colors
+    """
+    Stylize and save a video.
+    Create a mapping of input colors to output model colors. If a mapping does not exist, use the model result
+    and add it to the mapping. Otherwise, use the existing mapping result.
+    stylization_module : the style model
+    smoothing_module : post-processing smoothing module
+    content_video_path : path of content video
+    style_image_path : path of style image
+    content_seg_video_path : path of content segmentation video
+    style_seg_path : path of style segmentation
+    output_video_path : place to store result video
+    cuda : use GPU or not
+    no_post : enable post_processing
+    cont_seg_remapping : map segmentation to image sections
+    styl_seg_remapping : map segmentation to style sections
+    nframes : number of frames to stylize. if -1, stylize all frames.
+    """
+
     with torch.no_grad():
+        # Load video, read a frame
         cap = cv2.VideoCapture(content_video_path)
         success, cont_img_array = cap.read()
         styl_img = Image.open(style_image_path).convert('RGB')
@@ -256,6 +342,7 @@ def video_stylization_color_mapping(stylization_module, smoothing_module, conten
         color_mapping = {}
         frames = []
         count = 0
+        # Loop over frames
         while success and (nframes == -1 or count < nframes):
             count += 1
             cont_img = Image.fromarray(cv2.cvtColor(cont_img_array,cv2.COLOR_BGR2RGB))
@@ -263,7 +350,7 @@ def video_stylization_color_mapping(stylization_module, smoothing_module, conten
             if seg_cap != None:
                 cont_seg = Image.fromarray(cv2.cvtColor(cont_seg_array,cv2.COLOR_BGR2RGB))
 
-            # TODO move me? generate out_img only if necessary
+            # Stylize the frame
             out_img = stylize_image(stylization_module, smoothing_module, cont_img, styl_img, cont_seg,
                 styl_seg, cuda, no_post, cont_seg_remapping, styl_seg_remapping)
             
@@ -280,6 +367,7 @@ def video_stylization_color_mapping(stylization_module, smoothing_module, conten
 
             frames.append(np.array(out_img)[:,:,::-1].copy())
             
+            # Read the next frame
             success, cont_img_array = cap.read()
             if seg_cap != None:
                 seg_success, cont_seg_array = seg_cap.read()
@@ -289,6 +377,7 @@ def video_stylization_color_mapping(stylization_module, smoothing_module, conten
             return
         height, width, layers = frames[0].shape
         size = (width,height)
+        # Save video
         out = cv2.VideoWriter(output_video_path, cv2.VideoWriter_fourcc(*'XVID'), 30.0, size)
         for f in frames:
             out.write(f)
@@ -297,8 +386,26 @@ def video_stylization_color_mapping(stylization_module, smoothing_module, conten
 def video_stylization_optical_flow(stylization_module, smoothing_module, content_video_path, style_image_path,
         content_seg_video_path, style_seg_path, output_video_path, cuda, no_post, cont_seg_remapping=None,
         styl_seg_remapping=None, nframes=-1):
-    # use smarter optical flow for generating images
+    """
+    Stylize and save a video.
+    Take the previous frame and current frame, find the forward/backward flows between each. Warp each image
+    in the flow direction and do an alpha blend of both warped results.
+    stylization_module : the style model
+    smoothing_module : post-processing smoothing module
+    content_video_path : path of content video
+    style_image_path : path of style image
+    content_seg_video_path : path of content segmentation video
+    style_seg_path : path of style segmentation
+    output_video_path : place to store result video
+    cuda : use GPU or not
+    no_post : enable post_processing
+    cont_seg_remapping : map segmentation to image sections
+    styl_seg_remapping : map segmentation to style sections
+    nframes : number of frames to stylize. if -1, stylize all frames.
+    """
+    
     with torch.no_grad():
+        # Load video, first frame
         cap = cv2.VideoCapture(content_video_path)
         success, cont_img_array = cap.read()
         styl_img = Image.open(style_image_path).convert('RGB')
@@ -316,16 +423,18 @@ def video_stylization_optical_flow(stylization_module, smoothing_module, content
         prev_out_img = None
         frames = []
         count = 0
+        # Iterate over frames
         while success and (nframes == -1 or count < nframes):
             count += 1
             cont_img = Image.fromarray(cv2.cvtColor(cont_img_array,cv2.COLOR_BGR2RGB))
             memory_limit_image_resize(cont_img)
             cont_img_array = np.array(cont_img)
+            # Get the current frame in grayscale
             cont_img_gray = cv2.cvtColor(cont_img_array,cv2.COLOR_BGR2GRAY)
             if seg_cap != None:
                 cont_seg = Image.fromarray(cv2.cvtColor(cont_seg_array,cv2.COLOR_BGR2RGB))
 
-            # TODO move me? generate out_img only if necessary
+            # Stylize the image
             out_img = stylize_image(stylization_module, smoothing_module, cont_img, styl_img, cont_seg,
                 styl_seg, cuda, no_post, cont_seg_remapping, styl_seg_remapping)
            
@@ -333,8 +442,10 @@ def video_stylization_optical_flow(stylization_module, smoothing_module, content
             new_out_img_arr = np.array(out_img)[:,:,::-1].copy()
             new_out_img_arr2 = np.array(out_img)[:,:,::-1].copy()
 
-            if set_prev:
+            if set_prev: # if a previous frame exists
+                # Get forward flow
                 flow = cv2.calcOpticalFlowFarneback(prev_cont_img_gray, cont_img_gray, None, 0.5, 5, 15, 3, 5, 1.1, 0)
+                # Get backwards flow
                 bflow = cv2.calcOpticalFlowFarneback(cont_img_gray, prev_cont_img_gray, None, 0.5, 5, 15, 3, 5, 1.1, 0)
                 height = prev_out_img_arr.shape[0]
                 width = prev_out_img_arr.shape[1]
@@ -344,30 +455,36 @@ def video_stylization_optical_flow(stylization_module, smoothing_module, content
                 x_grid = grid[0]
                 y_grid = grid[1]
                 new_grid = np.copy(grid).astype(np.float64)
+                # Warp the meshgrid to the forward flow
                 new_grid[0] += flow[:,:,0]
                 new_grid[1] += flow[:,:,1]
                 new_grid = np.around(new_grid).astype(np.int64)
-                mask = (new_grid[0] < 0) | (new_grid[0] >= width)
+                mask = (new_grid[0] < 0) | (new_grid[0] >= width) # Prevent out of bounds error
                 new_x_grid = np.copy(new_grid[0])
                 new_x_grid[mask] = x_grid[mask]
-                mask = (new_grid[1] < 0) | (new_grid[1] >= height)
+                mask = (new_grid[1] < 0) | (new_grid[1] >= height) # Prevent out of bounds error
                 new_y_grid =  np.copy(new_grid[1])
                 new_y_grid[mask] = y_grid[mask]
+                # Perform the forward warp
                 new_out_img_arr[new_y_grid,new_x_grid] = prev_out_img_arr[y_grid,x_grid]
                 new_grid2 = np.copy(grid).astype(np.float64)
-                new_grid2[0] -= bflow[:,:,0]
-                new_grid2[1] -= bflow[:,:,1]
+                # Warp the meshgrid to the backward flow
+                new_grid2[0] += bflow[:,:,0]
+                new_grid2[1] += bflow[:,:,1]
                 new_grid2 = np.around(new_grid2).astype(np.int64)
-                mask = (new_grid2[0] < 0) | (new_grid2[0] >= width)
+                mask = (new_grid2[0] < 0) | (new_grid2[0] >= width) # Prevent out of bounds error
                 new_x_grid2 = np.copy(new_grid2[0])
                 new_x_grid2[mask] = x_grid[mask]
-                mask = (new_grid2[1] < 0) | (new_grid2[1] >= height)
+                mask = (new_grid2[1] < 0) | (new_grid2[1] >= height) # Prevent out of bounds error
                 new_y_grid2 =  np.copy(new_grid2[1])
                 new_y_grid2[mask] = y_grid[mask]
+                # Perform the backward warp
                 new_out_img_arr2[new_y_grid2,new_x_grid2] = out_img_arr[y_grid,x_grid]
+                # Convert warped images to Pillow Image
                 new_out_img = Image.fromarray(cv2.cvtColor(new_out_img_arr, cv2.COLOR_BGR2RGB))
                 new_out_img2 = Image.fromarray(cv2.cvtColor(new_out_img_arr2, cv2.COLOR_BGR2RGB))
 
+                # Blend both images at 50%
                 final_out = Image.blend(new_out_img, new_out_img2, 0.5)
             else:
                 final_out = out_img
@@ -375,9 +492,11 @@ def video_stylization_optical_flow(stylization_module, smoothing_module, content
 
             frames.append(np.array(final_out)[:,:,::-1].copy())
             
+            # Save the previous output and previous grayscale frame
             prev_cont_img_gray = cont_img_gray
             prev_out_img_arr = np.array(final_out)[:,:,::-1].copy()
 
+            # Read a frame
             success, cont_img_array = cap.read()
             if seg_cap != None:
                 seg_success, cont_seg_array = seg_cap.read()
@@ -387,6 +506,7 @@ def video_stylization_optical_flow(stylization_module, smoothing_module, content
             return
         height, width, layers = frames[0].shape
         size = (width,height)
+        # Save video
         out = cv2.VideoWriter(output_video_path, cv2.VideoWriter_fourcc(*'XVID'), 30.0, size)
         for f in frames:
             out.write(f)
@@ -395,8 +515,25 @@ def video_stylization_optical_flow(stylization_module, smoothing_module, content
 def video_stylization_smart_optical_flow(stylization_module, smoothing_module, content_video_path, style_image_path,
         content_seg_video_path, style_seg_path, output_video_path, cuda, no_post, cont_seg_remapping=None,
         styl_seg_remapping=None, nframes=-1):
-    # use smarter optical flow for generating images
+    """
+    Stylize and save a video.
+    Use gradient descent to train the output image based on content loss, style loss, and
+    temporal loss. Slower than other methods but produces far more interesting results.
+    stylization_module : the style model
+    smoothing_module : post-processing smoothing module
+    content_video_path : path of content video
+    style_image_path : path of style image
+    content_seg_video_path : path of content segmentation video
+    style_seg_path : path of style segmentation
+    output_video_path : place to store result video
+    cuda : use GPU or not
+    no_post : enable post_processing
+    cont_seg_remapping : map segmentation to image sections
+    styl_seg_remapping : map segmentation to style sections
+    nframes : number of frames to stylize. if -1, stylize all frames.
+    """
     with torch.no_grad():
+        # Load video
         cap = cv2.VideoCapture(content_video_path)
         success, cont_img_array = cap.read()
         styl_img = Image.open(style_image_path).convert('RGB')
@@ -415,6 +552,7 @@ def video_stylization_smart_optical_flow(stylization_module, smoothing_module, c
         prev_out_img = None
         frames = []
         count = 0
+        # Loop over frames
         while success and (nframes == -1 or count < nframes):
             count += 1
             cont_img = Image.fromarray(cv2.cvtColor(cont_img_array,cv2.COLOR_BGR2RGB))
@@ -424,13 +562,17 @@ def video_stylization_smart_optical_flow(stylization_module, smoothing_module, c
             if seg_cap != None:
                 cont_seg = Image.fromarray(cv2.cvtColor(cont_seg_array,cv2.COLOR_BGR2RGB))
 
-            # TODO move me? generate out_img only if necessary
+            # Stylize frame with PhotoWCT
             out_img = stylize_image(stylization_module, smoothing_module, cont_img, styl_img, cont_seg,
                 styl_seg, cuda, no_post, cont_seg_remapping, styl_seg_remapping)
             
+            # Resize content, style
             cont_img = cont_img.resize(out_img.size)
             styl_img = styl_img.resize(out_img.size)
 
+            # Run style transfer on the content image, style image, output image, previous output image,
+            # previous content image, and second previous content image. Load each image into a tensor,
+            # then take the training result tensor and unload into an image.
             if set_prev == 2:
                 final_out = unloader(run_style_transfer(image_loader(cont_img),
                     image_loader(styl_img), image_loader(out_img), image_loader(prev_out_img),
@@ -448,10 +590,12 @@ def video_stylization_smart_optical_flow(stylization_module, smoothing_module, c
 
             frames.append(np.array(final_out)[:,:,::-1].copy())
             
+            # Set previous frame values
             prev_out_img = final_out
             pprev_cont_img = prev_cont_img
             prev_cont_img = cont_img
 
+            # Load the next frame
             success, cont_img_array = cap.read()
             if seg_cap != None:
                 seg_success, cont_seg_array = seg_cap.read()
@@ -461,6 +605,7 @@ def video_stylization_smart_optical_flow(stylization_module, smoothing_module, c
             return
         height, width, layers = frames[0].shape
         size = (width,height)
+        # Save the video
         out = cv2.VideoWriter(output_video_path, cv2.VideoWriter_fourcc(*'XVID'), 30.0, size)
         for f in frames:
             out.write(f)
@@ -469,8 +614,26 @@ def video_stylization_smart_optical_flow(stylization_module, smoothing_module, c
 def video_stylization_artistic_optical_flow(stylization_module, smoothing_module, content_video_path, style_image_path,
         content_seg_video_path, style_seg_path, output_video_path, cuda, no_post, cont_seg_remapping=None,
         styl_seg_remapping=None, nframes=-1):
-    # use smarter optical flow for generating images
+    """
+    Stylize and save a video.
+    Use gradient descent to train the output image based on content loss, style loss, and
+    temporal loss. Slower than other methods but produces far more interesting results.
+    Use a higher style weight for artistic style.
+    stylization_module : the style model
+    smoothing_module : post-processing smoothing module
+    content_video_path : path of content video
+    style_image_path : path of style image
+    content_seg_video_path : path of content segmentation video
+    style_seg_path : path of style segmentation
+    output_video_path : place to store result video
+    cuda : use GPU or not
+    no_post : enable post_processing
+    cont_seg_remapping : map segmentation to image sections
+    styl_seg_remapping : map segmentation to style sections
+    nframes : number of frames to stylize. if -1, stylize all frames.
+    """
     with torch.no_grad():
+        # Load the video
         cap = cv2.VideoCapture(content_video_path)
         success, cont_img_array = cap.read()
         styl_img = Image.open(style_image_path).convert('RGB')
@@ -497,14 +660,17 @@ def video_stylization_artistic_optical_flow(stylization_module, smoothing_module
             cont_img_gray = cv2.cvtColor(cont_img_array,cv2.COLOR_BGR2GRAY)
             if seg_cap != None:
                 cont_seg = Image.fromarray(cv2.cvtColor(cont_seg_array,cv2.COLOR_BGR2RGB))
-
-            # TODO move me? generate out_img only if necessary
+            
+            # Stylize frame with PhotoWCT
             out_img = stylize_image(stylization_module, smoothing_module, cont_img, styl_img, cont_seg,
                 styl_seg, cuda, no_post, cont_seg_remapping, styl_seg_remapping)
             
+            # Resize content, style images
             cont_img = cont_img.resize(out_img.size)
             styl_img = styl_img.resize(out_img.size)
 
+            # Run style transfer on the tensor-converted images with a higher than normal style weight.
+            # Unload the output tensor into an image.
             if set_prev == 2:
                 final_out = unloader(run_style_transfer(image_loader(cont_img),
                     image_loader(styl_img), image_loader(out_img), image_loader(prev_out_img),
@@ -522,10 +688,12 @@ def video_stylization_artistic_optical_flow(stylization_module, smoothing_module
 
             frames.append(np.array(final_out)[:,:,::-1].copy())
             
+            # Save the previous frame values
             prev_out_img = final_out
             pprev_cont_img = prev_cont_img
             prev_cont_img = cont_img
 
+            # Load the next frame
             success, cont_img_array = cap.read()
             if seg_cap != None:
                 seg_success, cont_seg_array = seg_cap.read()
@@ -535,6 +703,7 @@ def video_stylization_artistic_optical_flow(stylization_module, smoothing_module
             return
         height, width, layers = frames[0].shape
         size = (width,height)
+        # Save the video
         out = cv2.VideoWriter(output_video_path, cv2.VideoWriter_fourcc(*'XVID'), 30.0, size)
         for f in frames:
             out.write(f)

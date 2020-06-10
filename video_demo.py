@@ -1,4 +1,10 @@
 """
+Read in args, call correct method to stylize video.
+Produce an output video based on input video content and style image.
+Transfer the style onto the video frames using various methods.
+"""
+
+"""
 Copyright (C) 2018 NVIDIA Corporation.  All rights reserved.
 Licensed under the CC BY-NC-SA 4.0 license (https://creativecommons.org/licenses/by-nc-sa/4.0/legalcode).
 """
@@ -30,16 +36,19 @@ args = parser.parse_args()
 p_wct = PhotoWCT()
 p_wct.load_state_dict(torch.load(args.model))
 
+# Use fast smoothing module if enabled
 if args.fast:
     from photo_gif import GIFSmoothing
     p_pro = GIFSmoothing(r=35, eps=0.001)
 else:
     from photo_smooth import Propagator
     p_pro = Propagator()
+# Enable CUDA
 if args.cuda:
     p_wct.cuda(0)
 
 if args.artistic_optical_flow:
+    # Run artistic style
     process_stylization.video_stylization_artistic_optical_flow(
         stylization_module=p_wct,
         smoothing_module=p_pro,
@@ -53,6 +62,7 @@ if args.artistic_optical_flow:
         nframes=args.nframes
     )
 elif args.smart_optical_flow:
+    # Run optical flow training
     process_stylization.video_stylization_smart_optical_flow(
         stylization_module=p_wct,
         smoothing_module=p_pro,
@@ -66,6 +76,7 @@ elif args.smart_optical_flow:
         nframes=args.nframes
     )
 elif args.optical_flow:
+    # Run alpha blending of optical flows
     process_stylization.video_stylization_optical_flow(
         stylization_module=p_wct,
         smoothing_module=p_pro,
@@ -79,6 +90,7 @@ elif args.optical_flow:
         nframes=args.nframes
     )
 elif args.color_mapping:
+    # Run color mapping method
     process_stylization.video_stylization_color_mapping(
         stylization_module=p_wct,
         smoothing_module=p_pro,
@@ -92,6 +104,7 @@ elif args.color_mapping:
         nframes=args.nframes
     )
 elif args.general_flow:
+    # Run pixel preservation optical flow
     process_stylization.video_stylization_general_flow(
         stylization_module=p_wct,
         smoothing_module=p_pro,
@@ -105,6 +118,7 @@ elif args.general_flow:
         nframes=args.nframes
     )
 else:
+    # Stylize each frame separately
     process_stylization.video_stylization_basic(
         stylization_module=p_wct,
         smoothing_module=p_pro,
