@@ -80,6 +80,10 @@ process_stylization.py : implementations of all video methods
 model.py : the gradient descent model for optical flow training and artistic stylization
 ```
 
+Finally, the `demos/` folder contains video demos, sorted by video name. Just choose a subdirectory, and you can view
+the results of each method for each video. The `README.md` file in each directory holds links to the content source and
+style source.
+
 -------------------------------
 
 # ORIGINAL README
